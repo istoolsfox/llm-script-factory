@@ -4,6 +4,11 @@
 
 一键生成 80-100 集短剧剧本的 AI 辅助创作工具。从一个创意点子开始，经过 6 个阶段的 AI 辅助，最终产出完整的分集剧本。
 
+> **⚠️ 二次开发声明**
+> 本仓库（`istoolsfox/llm-script-factory`）为基于 [oidahdsah0/llm-script-factory](https://github.com/oidahdsah0/llm-script-factory) 的 **二次开发（fork / secondary development）** 版本。
+> 原始项目：[https://github.com/oidahdsah0/llm-script-factory](https://github.com/oidahdsah0/llm-script-factory)
+> 在此基础上的改动：升级前端为 Next.js、统一异常处理、增强 LLM 网关、收紧 CORS、移除风险控制模块等。
+
 ![Python](https://img.shields.io/badge/Python-3.10+-blue?logo=python&logoColor=white)
 ![Node.js](https://img.shields.io/badge/Node.js-18+-green?logo=nodedotjs&logoColor=white)
 ![License](https://img.shields.io/badge/License-MIT-yellow)
