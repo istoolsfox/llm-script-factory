@@ -16,32 +16,25 @@ class ModelConfigService:
     
     # 默认模型配置模板
     DEFAULT_MODELS = {
-        "gemini-3-pro-high": {
-            "provider": "google",
-            "model_name": "gemini-3-pro-preview",
-            "api_key_env": "GEMINI_API_KEY",
-            "thinking_level": "high",
-            "supports_cache": True,
-            "description": "Gemini 3 Pro (High Thinking - Deep Reasoning)",
-            "pricing": {"input": 0.0, "output": 0.0}
-        },
-        "gemini-3-flash-minimal": {
-            "provider": "google",
-            "model_name": "gemini-3-flash-preview",
-            "api_key_env": "GEMINI_API_KEY",
-            "thinking_level": "minimal",
-            "supports_cache": False,
-            "description": "Gemini 3 Flash (Minimal - Lowest Latency)",
-            "pricing": {"input": 0.0, "output": 0.0}
-        },
-        "deepseek-v3": {
+        "qwen3.8-max": {
             "provider": "openai",
-            "model_name": "deepseek-chat",
-            "base_url": "https://api.deepseek.com",
-            "api_key_env": "DEEPSEEK_API_KEY",
+            "model_name": "qwen3.8-max",
+            "base_url": "https://dashscope.aliyuncs.com/compatible-mode/v1",
+            "api_key_env": "DASHSCOPE_API_KEY",
             "supports_cache": False,
-            "description": "DeepSeek V3 (Cost Effective)",
-            "pricing": {"input": 0.14, "output": 0.28}
+            "enable_thinking": False,
+            "description": "Qwen3.8-Max (最新旗舰, 强推理/规划)",
+            "pricing": {"input": 12.0, "output": 36.0}
+        },
+        "qwen3.8-flash": {
+            "provider": "openai",
+            "model_name": "qwen3.8-flash",
+            "base_url": "https://dashscope.aliyuncs.com/compatible-mode/v1",
+            "api_key_env": "DASHSCOPE_API_KEY",
+            "supports_cache": False,
+            "enable_thinking": False,
+            "description": "Qwen3.8-Flash (最新快模型, 批量写剧/润色)",
+            "pricing": {"input": 0.8, "output": 2.7}
         }
     }
     

@@ -135,7 +135,7 @@ class ApiKeyService:
                 return {"success": True, "message": "已恢复默认配置"}
             else:
                 # 如果没有 example，创建空模板
-                default_keys = ["GEMINI_API_KEY", "DEEPSEEK_API_KEY"]
+                default_keys = ["DASHSCOPE_API_KEY"]
                 env_vars = {k: "EMPTY" for k in default_keys}
                 ApiKeyService._write_env(env_vars)
                 return {"success": True, "message": "已恢复默认配置"}
@@ -149,21 +149,13 @@ class ApiKeyService:
         根据 key_name 推断 provider 并调用对应 API 测试
         """
         try:
-            if "GEMINI" in key_name.upper():
-                # Google Gemini 验证
-                from google import genai
-                client = genai.Client(api_key=key_value)
-                # 简单测试：列出模型
-                list(client.models.list())
-                return {"valid": True, "message": "Gemini API Key 验证通过"}
-            
-            elif "DEEPSEEK" in key_name.upper():
-                # DeepSeek (OpenAI 兼容) 验证
+            if "DASHSCOPE" in key_name.upper():
+                # 阿里云百炼 (OpenAI 兼容) 验证
                 import openai
-                client = openai.OpenAI(api_key=key_value, base_url="https://api.deepseek.com")
+                client = openai.OpenAI(api_key=key_value, base_url="https://dashscope.aliyuncs.com/compatible-mode/v1")
                 # 简单测试：列出模型
                 client.models.list()
-                return {"valid": True, "message": "DeepSeek API Key 验证通过"}
+                return {"valid": True, "message": "DashScope API Key 验证通过"}
             
             else:
                 return {"valid": False, "message": "无法识别的 Key 类型，跳过验证"}

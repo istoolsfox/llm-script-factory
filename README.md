@@ -18,7 +18,7 @@
 ## ✨ 功能特色
 
 - 🚀 **全流程覆盖**：从创意到成品剧本，6 个阶段一站式完成
-- 🤖 **多模型支持**：支持 Google Gemini、DeepSeek 等主流大模型
+- 🤖 **多模型支持**：支持阿里云百炼 Qwen 等 OpenAI 兼容大模型
 - ⚙️ **可视化配置**：内置 API Key 和模型管理页面，无需手动编辑配置文件
 - 📝 **所见即所得**：Markdown 编辑器，实时预览，支持手动调整 AI 生成内容
 - 💾 **本地优先**：所有数据保存在本地，无需担心隐私泄露
@@ -63,7 +63,7 @@
 
 - **Python** 3.10 或更高版本（推荐 3.12）
 - **Node.js** 18 或更高版本
-- **API Key**：需要 Google Gemini 或 DeepSeek 的 API Key（至少一个）
+- **API Key**：需要阿里云百炼的 API Key
 
 ---
 
@@ -87,8 +87,7 @@ cp backend/.env.example backend/.env
 编辑 `backend/.env`：
 
 ```env
-GEMINI_API_KEY=你的Gemini密钥
-DEEPSEEK_API_KEY=你的DeepSeek密钥
+DASHSCOPE_API_KEY=你的阿里云百炼密钥
 ```
 
 ### 3. 安装依赖
@@ -144,7 +143,7 @@ script-factory-ai/
 
 启动应用后，访问侧边栏的 **API Keys** 和 **Models** 页面进行可视化配置：
 
-- `/settings/keys` - 管理 API 密钥（Gemini、DeepSeek 等）
+- `/settings/keys` - 管理 API 密钥（阿里云百炼等）
 - `/settings/models` - 管理模型配置（新增、编辑、删除）
 
 也可以手动编辑配置文件：
@@ -171,7 +170,7 @@ models:
       output: 0.0
 ```
 
-常见兼容服务：DeepSeek、Moonshot、智谱、零一万物、Ollama 本地部署等。
+常见兼容服务：阿里云百炼（Qwen）、DeepSeek、Moonshot、智谱、零一万物、Ollama 本地部署等。
 
 ### 项目数据
 

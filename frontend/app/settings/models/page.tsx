@@ -50,10 +50,10 @@ interface ModelConfig {
 }
 
 const emptyModel: Omit<ModelConfig, "id"> = {
-    provider: "google",
+    provider: "openai",
     model_name: "",
-    api_key_env: "GEMINI_API_KEY",
-    base_url: "",
+    api_key_env: "DASHSCOPE_API_KEY",
+    base_url: "https://dashscope.aliyuncs.com/compatible-mode/v1",
     thinking_level: "minimal",
     supports_cache: false,
     description: "",
@@ -293,11 +293,11 @@ export default function ModelsPage() {
                                 onValueChange={(v) => {
                                     updateField("provider", v);
                                     // 自动切换 api_key_env
-                                    if (v === "google") {
-                                        updateField("api_key_env", "GEMINI_API_KEY");
-                                        updateField("base_url", "");
+                                    if (v === "openai") {
+                                        updateField("api_key_env", "DASHSCOPE_API_KEY");
+                                        updateField("base_url", "https://dashscope.aliyuncs.com/compatible-mode/v1");
                                     } else {
-                                        updateField("api_key_env", "DEEPSEEK_API_KEY");
+                                        updateField("api_key_env", "DASHSCOPE_API_KEY");
                                     }
                                 }}
                             >
@@ -315,7 +315,7 @@ export default function ModelsPage() {
                         <div className="grid gap-2">
                             <Label>Model Name *</Label>
                             <Input
-                                placeholder="例如: gemini-3-pro-preview"
+                                placeholder="例如: qwen3.8-max"
                                 value={formData.model_name}
                                 onChange={(e) => updateField("model_name", e.target.value)}
                             />
@@ -335,8 +335,7 @@ export default function ModelsPage() {
                                             <p className="text-slate-300 mb-2">模型会通过这个变量名获取对应的 API Key</p>
                                             <p className="font-semibold">示例：</p>
                                             <ul className="list-disc list-inside text-slate-300">
-                                                <li>GEMINI_API_KEY → Google Gemini</li>
-                                                <li>DEEPSEEK_API_KEY → DeepSeek</li>
+                                                <li>DASHSCOPE_API_KEY → 阿里云百炼</li>
                                                 <li>OPENAI_API_KEY → OpenAI</li>
                                                 <li>MY_CUSTOM_KEY → 自定义服务</li>
                                             </ul>
@@ -348,7 +347,7 @@ export default function ModelsPage() {
                                 </TooltipProvider>
                             </div>
                             <Input
-                                placeholder="例如: GEMINI_API_KEY"
+                                placeholder="例如: DASHSCOPE_API_KEY"
                                 value={formData.api_key_env}
                                 onChange={(e) => updateField("api_key_env", e.target.value)}
                             />
@@ -359,7 +358,7 @@ export default function ModelsPage() {
                             <div className="grid gap-2">
                                 <Label>Base URL</Label>
                                 <Input
-                                    placeholder="例如: https://api.deepseek.com"
+                                    placeholder="例如: https://dashscope.aliyuncs.com/compatible-mode/v1"
                                     value={formData.base_url}
                                     onChange={(e) => updateField("base_url", e.target.value)}
                                 />
