@@ -1,4 +1,4 @@
-const BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://127.0.0.1:8000';
+const BASE_URL = process.env.NEXT_PUBLIC_API_URL || '';
 
 export async function fetchAPI(endpoint: string, options: RequestInit = {}) {
     const url = `${BASE_URL}${endpoint}`;
