@@ -200,13 +200,19 @@ class LLMManager:
                     messages.append({"role": "system", "content": system_instruction})
                 messages.append({"role": "user", "content": prompt})
                 
+                # Provider-specific extra body params (e.g. DashScope enable_thinking)
+                extra_body = None
+                if "enable_thinking" in model_cfg:
+                    extra_body = {"enable_thinking": model_cfg.get("enable_thinking")}
+                
                 response = self.gateway.call_openai(
                     api_key=api_key,
                     base_url=base_url,
                     model_name=model_name,
                     messages=messages,
                     temperature=temperature,
-                    response_schema=None # response_schema # DeepSeek 不支持 response_format，暂时禁用
+                    response_schema=None, # response_schema # DeepSeek 不支持 response_format，暂时禁用
+                    extra_body=extra_body
                 )
                 
                 raw_text = response.choices[0].message.content

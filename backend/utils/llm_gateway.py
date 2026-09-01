@@ -21,7 +21,7 @@ class LLMGateway:
     def _get_openai_client(api_key, base_url):
         # Explicitly use a clean httpx client to avoid environmental pollution or proxy args issues
         # occurring in implicit default client creation.
-        http_client = httpx.Client(timeout=httpx.Timeout(120.0))
+        http_client = httpx.Client(timeout=httpx.Timeout(600.0))
         return openai.OpenAI(api_key=api_key, base_url=base_url, http_client=http_client)
 
     def _retry_wrapper(self, func_name, func, *args, **kwargs):
@@ -92,13 +92,15 @@ class LLMGateway:
             config=gen_config
         )
 
-    def call_openai(self, api_key, base_url, model_name, messages, temperature=0.7, response_schema=None):
+    def call_openai(self, api_key, base_url, model_name, messages, temperature=0.7, response_schema=None, extra_body=None):
         """
         Execute OpenAI/Compatible request.
         
         Args:
             response_schema: Optional JSON schema dict for structured output.
                             Uses OpenAI's json_schema format if supported.
+            extra_body: Optional dict of provider-specific body params (e.g.
+                        {"enable_thinking": False} for DashScope/Qwen).
         """
         client = self._get_openai_client(api_key, base_url)
         
@@ -120,11 +122,17 @@ class LLMGateway:
             response_format = {"type": "json_object"}
         
         # Standard Chat Completion
+        kwargs = {
+            "model": model_name,
+            "messages": messages,
+            "temperature": temperature,
+            "response_format": response_format,
+        }
+        if extra_body:
+            kwargs["extra_body"] = extra_body
+        
         return self._retry_wrapper(
             "call_openai",
             client.chat.completions.create,
-            model=model_name,
-            messages=messages,
-            temperature=temperature,
-            response_format=response_format
+            **kwargs
         )

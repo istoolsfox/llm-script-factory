@@ -5,6 +5,7 @@ models:
     base_url: https://dashscope.aliyuncs.com/compatible-mode/v1
     api_key_env: DASHSCOPE_API_KEY
     supports_cache: false
+    enable_thinking: false
     description: "Qwen3.8-Max (最新旗舰, 强推理/规划)"
     pricing:
       input: 12.0
@@ -16,6 +17,7 @@ models:
     base_url: https://dashscope.aliyuncs.com/compatible-mode/v1
     api_key_env: DASHSCOPE_API_KEY
     supports_cache: false
+    enable_thinking: false
     description: "Qwen3.8-Flash (最新快模型, 批量写剧/润色)"
     pricing:
       input: 0.8
