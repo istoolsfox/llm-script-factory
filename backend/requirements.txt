@@ -3,6 +3,7 @@ uvicorn
 python-dotenv
 google-genai
 openai
+httpx
 jinja2
 pyyaml
 colorama

@@ -34,6 +34,17 @@ if [ ! -d "node_modules" ]; then
     exit 1
 fi
 
+# Check production build
+if [ ! -d ".next" ]; then
+    echo "   Production build (.next) not found. Building frontend..."
+    npm run build > ../frontend-build.log 2>&1 || {
+        echo "[ERROR] Frontend build failed. See frontend-build.log"
+        kill $BACKEND_PID 2>/dev/null
+        exit 1
+    }
+    echo "   Frontend build complete"
+fi
+
 npm run start > ../frontend.log 2>&1 &
 FRONTEND_PID=$!
 echo "   Frontend PID: $FRONTEND_PID (log: frontend.log)"
