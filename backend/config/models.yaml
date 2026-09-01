@@ -1,4 +1,26 @@
 models:
+  qwen3.8-max:
+    provider: openai
+    model_name: qwen3.8-max
+    base_url: https://dashscope.aliyuncs.com/compatible-mode/v1
+    api_key_env: DASHSCOPE_API_KEY
+    supports_cache: false
+    description: "Qwen3.8-Max (最新旗舰, 强推理/规划)"
+    pricing:
+      input: 12.0
+      output: 36.0
+
+  qwen3.8-flash:
+    provider: openai
+    model_name: qwen3.8-flash
+    base_url: https://dashscope.aliyuncs.com/compatible-mode/v1
+    api_key_env: DASHSCOPE_API_KEY
+    supports_cache: false
+    description: "Qwen3.8-Flash (最新快模型, 批量写剧/润色)"
+    pricing:
+      input: 0.8
+      output: 2.7
+
   gemini-3-pro-high:
     provider: google
     model_name: gemini-3-pro-preview
