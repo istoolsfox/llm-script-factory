@@ -21,7 +21,6 @@ class ModelConfigService:
             "model_name": "qwen3.8-max",
             "base_url": "https://dashscope.aliyuncs.com/compatible-mode/v1",
             "api_key_env": "DASHSCOPE_API_KEY",
-            "supports_cache": False,
             "enable_thinking": False,
             "description": "Qwen3.8-Max (最新旗舰, 强推理/规划)",
             "pricing": {"input": 12.0, "output": 36.0}
@@ -31,7 +30,6 @@ class ModelConfigService:
             "model_name": "qwen3.8-flash",
             "base_url": "https://dashscope.aliyuncs.com/compatible-mode/v1",
             "api_key_env": "DASHSCOPE_API_KEY",
-            "supports_cache": False,
             "enable_thinking": False,
             "description": "Qwen3.8-Flash (最新快模型, 批量写剧/润色)",
             "pricing": {"input": 0.8, "output": 2.7}
@@ -110,9 +108,9 @@ class ModelConfigService:
                 return {"success": False, "error": f"缺少必填字段: {field}"}
         
         # 验证 provider
-        if config["provider"] not in ["google", "openai"]:
-            return {"success": False, "error": "provider 必须是 google 或 openai"}
-        
+        if config["provider"] != "openai":
+            return {"success": False, "error": "provider 必须是 openai（OpenAI 兼容协议）"}
+
         # 备份再写入
         ModelConfigService._backup_config()
         models[model_id] = config
@@ -130,8 +128,8 @@ class ModelConfigService:
             return {"success": False, "error": f"模型 {model_id} 不存在"}
         
         # 验证 provider
-        if "provider" in config and config["provider"] not in ["google", "openai"]:
-            return {"success": False, "error": "provider 必须是 google 或 openai"}
+        if "provider" in config and config["provider"] != "openai":
+            return {"success": False, "error": "provider 必须是 openai（OpenAI 兼容协议）"}
         
         # 备份再写入
         ModelConfigService._backup_config()

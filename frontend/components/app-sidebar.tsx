@@ -6,21 +6,18 @@ import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import {
     FolderPlus,
     LayoutDashboard,
-    Lightbulb,
-    GalleryVerticalEnd,
-    Clapperboard,
-    FileText,
-    Wand2,
-    Stethoscope,
-    ChevronLeft,
-    ChevronRight,
-    Settings,
-    Activity,
-    Bug,
-    Zap,
+    Check,
     Upload,
     Search,
-    History
+    History,
+    ChevronLeft,
+    ChevronRight,
+    KeyRound,
+    SlidersHorizontal,
+    Bug,
+    Clapperboard,
+    PenLine,
+    LogOut,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
@@ -34,10 +31,18 @@ import {
 } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
-import { api } from "@/lib/api";
+import { api, setAuthToken } from "@/lib/api";
 import { toast } from "sonner";
 import { useProject, type Project } from "@/lib/contexts/project-context";
 import { ProjectCommand } from "@/components/project-command";
+import { STAGES } from "@/lib/stages";
+
+/** 把 token 数换算成写作者可感知的"约多少字"（中文 1 token ≈ 1 字）。 */
+function tokensToChars(n: number | undefined | null): string {
+    const v = n || 0;
+    if (v >= 10000) return `${(v / 10000).toFixed(1)} 万字`;
+    return `${v.toLocaleString()} 字`;
+}
 
 export function AppSidebar() {
     const pathname = usePathname();
@@ -96,7 +101,7 @@ export function AppSidebar() {
             // Or better: Let user action drive URL.
             // If we want detailed deep linking, we should set URL when activeProject changes.
         }
-    }, [searchParams, projects]);
+    }, [searchParams, projects, activeProject]);
 
     // Reverse Sync: Update URL when activeProject changes
     React.useEffect(() => {
@@ -153,36 +158,62 @@ export function AppSidebar() {
             setIsDialogOpen(false);
             setNewProjectName("");
             setNewProjectDesc("");
-            // Auto-selection handled in context/effect or we can force it here if context returns the new project object
-            // For now rely on Context updating list and user selecting it or Context auto-selecting.
         }
     };
 
-    const navItems = [
-        { name: "概览 Dashboard", icon: LayoutDashboard, href: "/" },
-        { name: "Stage 1: 创意孵化", icon: Lightbulb, href: "/stage1", disabled: false },
-        { name: "Stage 2: 结构构建", icon: GalleryVerticalEnd, href: "/stage2", disabled: false },
-        { name: "Stage 3: 分场编写", icon: Clapperboard, href: "/stage3", disabled: false },
-        { name: "Stage 4: 剧本撰写", icon: FileText, href: "/stage4", disabled: false },
-        { name: "Stage 5: 润色优化", icon: Wand2, href: "/stage5", disabled: false },
-        { name: "Stage 6: 剧本医生", icon: Stethoscope, href: "/stage6", disabled: false },
-        { name: "Cache Manager", icon: Zap, href: "/cache", disabled: false },
-        { name: "版本历史", icon: History, href: "/versions", disabled: false },
-        { name: "API Keys", icon: Settings, href: "/settings/keys", disabled: false },
-        { name: "Models", icon: Settings, href: "/settings/models", disabled: false },
-        { name: "Debug Console", icon: Bug, href: "/debug", disabled: false },
+    const projectName = activeProject?.name || "";
+    const withProject = (href: string) => `${href}?project=${encodeURIComponent(projectName)}`;
+    const isActive = (href: string) => (href === "/" ? pathname === "/" : pathname.startsWith(href));
+    const stagesDone = activeProject?.stages;
+
+    const toolItems = [
+        { name: "导入已有剧本", icon: Upload, href: "/import" },
+        { name: "版本历史", icon: History, href: "/versions" },
     ];
+    const settingsItems = [
+        { name: "API Keys", icon: KeyRound, href: "/settings/keys" },
+        { name: "模型配置", icon: SlidersHorizontal, href: "/settings/models" },
+        { name: "调试控制台", icon: Bug, href: "/debug" },
+    ];
+
+    const handleLogout = () => {
+        setAuthToken(null);
+        router.push("/login");
+    };
+
+    const renderNavLink = (item: { name: string; icon: any; href: string }) => (
+        <Link
+            key={item.href}
+            href={withProject(item.href)}
+            className={cn(
+                "flex items-center gap-2.5 rounded-md px-3 py-1.5 text-sm transition-colors",
+                isActive(item.href)
+                    ? "bg-slate-100 font-medium text-slate-900 dark:bg-slate-800 dark:text-slate-50"
+                    : "text-slate-500 hover:bg-slate-100 hover:text-slate-900 dark:text-slate-400 dark:hover:bg-slate-800 dark:hover:text-slate-50",
+                isCollapsed && "justify-center px-2"
+            )}
+            title={isCollapsed ? item.name : undefined}
+        >
+            <item.icon size={16} />
+            {!isCollapsed && <span>{item.name}</span>}
+        </Link>
+    );
 
     return (
         <div
             className={cn(
                 "flex flex-col border-r bg-white dark:bg-slate-900 transition-all duration-300 ease-in-out h-screen",
-                isCollapsed ? "w-16" : "w-64"
+                isCollapsed ? "w-16" : "w-60"
             )}
         >
             {/* Header */}
-            <div className={cn("flex items-center h-14 px-3 border-b shrink-0", isCollapsed ? "justify-center" : "justify-between")}>
-                {!isCollapsed && <span className="font-bold text-lg truncate">🎬 ScriptFactory</span>}
+            <div className={cn("flex items-center h-14 px-4 border-b shrink-0", isCollapsed ? "justify-center px-2" : "justify-between")}>
+                {!isCollapsed && (
+                    <span className="flex items-center gap-2 font-bold text-base truncate">
+                        <Clapperboard size={18} className="text-slate-900 dark:text-slate-100 shrink-0" />
+                        剧本工厂
+                    </span>
+                )}
                 <Button
                     variant="ghost"
                     size="icon"
@@ -196,15 +227,15 @@ export function AppSidebar() {
             {/* Project Selector */}
             <div className="p-3 border-b shrink-0">
                 {isCollapsed ? (
-                    <div className="flex justify-center" title={activeProject?.name || "Select Project"}>
+                    <div className="flex justify-center" title={activeProject?.name || "选择项目"}>
                         <FolderPlus className="text-blue-600" />
                     </div>
                 ) : (
                     <div className="space-y-2">
-                        <label className="text-xs font-semibold text-slate-500 uppercase">当前项目</label>
+                        <label className="text-xs font-medium text-slate-400">当前剧本项目</label>
                         <Select value={activeProject?.name || ""} onValueChange={handleProjectChange} disabled={isLoading}>
                             <SelectTrigger className="w-full">
-                                <SelectValue placeholder={isLoading ? "Loading..." : "选择项目..."} />
+                                <SelectValue placeholder={isLoading ? "加载中..." : "选择项目..."} />
                             </SelectTrigger>
                             <SelectContent>
                                 {projects.map(p => (
@@ -223,12 +254,12 @@ export function AppSidebar() {
                         </Select>
 
                         {/* Create & Import Buttons */}
-                        <div className="flex gap-2 mt-2">
+                        <div className="flex gap-2">
                             <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
                                 <DialogTrigger asChild>
-                                    <Button variant="outline" size="sm" className="flex-1 gap-1 text-slate-500 border-dashed">
-                                        <FolderPlus size={14} />
-                                        新建
+                                    <Button variant="outline" size="sm" className="flex-1 h-7 gap-1 text-xs text-slate-500 border-dashed">
+                                        <FolderPlus size={13} />
+                                        新建项目
                                     </Button>
                                 </DialogTrigger>
                                 <DialogContent>
@@ -262,9 +293,9 @@ export function AppSidebar() {
                                 </DialogContent>
                             </Dialog>
 
-                            <Link href="/import">
-                                <Button variant="outline" size="sm" className="gap-1 text-slate-500 border-dashed">
-                                    <Upload size={14} />
+                            <Link href="/import" className="flex-1">
+                                <Button variant="outline" size="sm" className="w-full h-7 gap-1 text-xs text-slate-500 border-dashed">
+                                    <Upload size={13} />
                                     导入
                                 </Button>
                             </Link>
@@ -273,31 +304,109 @@ export function AppSidebar() {
                 )}
             </div>
 
-            {/* Nav List */}
-            <div className="flex-1 overflow-y-auto py-2">
-                <nav className="grid gap-1 px-2">
-                    {navItems.map((item, index) => {
-                        const isActive = item.href === "/" ? pathname === "/" : pathname.startsWith(item.href);
-                        return (
-                            <Link
-                                key={index}
-                                href={item.disabled ? "#" : `${item.href}?project=${encodeURIComponent(activeProject?.name || "")}`}
-                                className={cn(
-                                    "flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium transition-colors",
-                                    isActive
-                                        ? "bg-slate-100 text-slate-900 dark:bg-slate-800 dark:text-slate-50"
-                                        : "text-slate-500 hover:bg-slate-100 hover:text-slate-900 dark:text-slate-400 dark:hover:bg-slate-800 dark:hover:text-slate-50",
-                                    item.disabled && "opacity-50 cursor-not-allowed pointer-events-none",
-                                    isCollapsed && "justify-center px-2"
-                                )}
-                                title={isCollapsed ? item.name : undefined}
-                            >
-                                <item.icon size={18} />
-                                {!isCollapsed && <span>{item.name}</span>}
-                            </Link>
-                        );
-                    })}
+            {/* Nav */}
+            <div className="flex-1 overflow-y-auto py-3">
+                {/* 概览 */}
+                <nav className={cn("grid gap-0.5 px-2", isCollapsed && "px-1")}>
+                    {renderNavLink({ name: "概览", icon: LayoutDashboard, href: "/" })}
                 </nav>
+
+                {/* 创作流程：六阶段 Stepper */}
+                <div className={cn("mt-4 px-2", isCollapsed && "px-1")}>
+                    {!isCollapsed && (
+                        <div className="px-3 pb-1.5 text-xs font-medium text-slate-400">创作流程</div>
+                    )}
+                    <nav className="grid gap-0.5" aria-label="创作流程">
+                        {STAGES.map((stage, index) => {
+                            const done = !!stagesDone?.[stage.key];
+                            const isCurrent = pathname.startsWith(`/${stage.id}`);
+                            // 未选项目时流程只读，避免用户在无项目状态下误入
+                            const disabled = !activeProject;
+                            const item = (
+                                <span
+                                    className={cn(
+                                        "relative flex items-center gap-2.5 rounded-md px-3 py-1.5 text-sm transition-colors",
+                                        isCurrent
+                                            ? "bg-slate-100 font-medium text-slate-900 dark:bg-slate-800 dark:text-slate-50"
+                                            : done
+                                                ? "text-slate-600 dark:text-slate-300"
+                                                : "text-slate-500 dark:text-slate-400",
+                                        !disabled && !isCurrent && "hover:bg-slate-100 dark:hover:bg-slate-800",
+                                        disabled && "opacity-50 cursor-not-allowed",
+                                        isCollapsed && "justify-center px-2"
+                                    )}
+                                >
+                                    {/* 连接线（非最后一项） */}
+                                    {!isCollapsed && index < STAGES.length - 1 && (
+                                        <span
+                                            aria-hidden
+                                            className={cn(
+                                                "absolute left-[26px] top-[28px] h-[14px] w-px",
+                                                done ? "bg-emerald-300 dark:bg-emerald-700" : "bg-slate-200 dark:bg-slate-700"
+                                            )}
+                                        />
+                                    )}
+                                    <span
+                                        className={cn(
+                                            "flex h-5 w-5 shrink-0 items-center justify-center rounded-full border text-[11px] font-medium leading-none",
+                                            isCurrent
+                                                ? "border-slate-900 bg-slate-900 text-white dark:border-slate-100 dark:bg-slate-100 dark:text-slate-900"
+                                                : done
+                                                    ? "border-emerald-500 bg-emerald-500 text-white"
+                                                    : "border-slate-300 text-slate-400 dark:border-slate-600 dark:text-slate-500"
+                                        )}
+                                    >
+                                        {done ? <Check size={11} strokeWidth={3} /> : stage.step}
+                                    </span>
+                                    {!isCollapsed && (
+                                        <span className="truncate">
+                                            {stage.name}
+                                            <span className="ml-1.5 text-xs text-slate-400">{stage.en}</span>
+                                        </span>
+                                    )}
+                                </span>
+                            );
+                            return disabled ? (
+                                <span key={stage.id} title="请先选择或新建项目" className="block">
+                                    {item}
+                                </span>
+                            ) : (
+                                <Link key={stage.id} href={withProject(`/${stage.id}`)} className="block">
+                                    {item}
+                                </Link>
+                            );
+                        })}
+                    </nav>
+                </div>
+
+                {/* 工具 */}
+                <div className={cn("mt-4 px-2", isCollapsed && "px-1")}>
+                    {!isCollapsed && (
+                        <div className="px-3 pb-1.5 text-xs font-medium text-slate-400">工具</div>
+                    )}
+                    <nav className="grid gap-0.5">{toolItems.map(renderNavLink)}</nav>
+                </div>
+
+                {/* 设置 */}
+                <div className={cn("mt-4 px-2", isCollapsed && "px-1")}>
+                    {!isCollapsed && (
+                        <div className="px-3 pb-1.5 text-xs font-medium text-slate-400">设置</div>
+                    )}
+                    <nav className="grid gap-0.5">
+                        {settingsItems.map(renderNavLink)}
+                        <button
+                            onClick={handleLogout}
+                            className={cn(
+                                "flex items-center gap-2.5 rounded-md px-3 py-1.5 text-sm text-slate-500 hover:bg-slate-100 hover:text-slate-900 transition-colors dark:text-slate-400 dark:hover:bg-slate-800 dark:hover:text-slate-50",
+                                isCollapsed && "justify-center px-2"
+                            )}
+                            title={isCollapsed ? "退出登录" : undefined}
+                        >
+                            <LogOut size={16} />
+                            {!isCollapsed && <span>退出登录</span>}
+                        </button>
+                    </nav>
+                </div>
 
                 {/* Model Selector (Only when not collapsed) */}
                 {!isCollapsed && <ModelSelector />}
@@ -306,28 +415,23 @@ export function AppSidebar() {
             {/* Footer: Usage Stats */}
             <div className="px-3 py-2 border-t bg-slate-50/50 dark:bg-slate-900/50 shrink-0">
                 {isCollapsed ? (
-                    <div className="flex justify-center" title="Token Usage">
-                        <Activity size={16} className="text-slate-400" />
+                    <div className="flex justify-center" title="今日创作量">
+                        <PenLine size={15} className="text-slate-400" />
                     </div>
                 ) : (
-                    <div className="text-xs space-y-1">
-                        <div className="flex items-center gap-1 text-slate-500 font-medium">
-                            <Activity size={10} /> Token 消耗
-                        </div>
-                        <div className="flex items-center justify-between text-slate-600 dark:text-slate-400">
-                            <span>
-                                今日: <span className="font-mono">{usage?.today?.input_tokens?.toLocaleString() || 0}</span>/<span className="font-mono">{usage?.today?.output_tokens?.toLocaleString() || 0}</span>
+                    <div className="text-xs space-y-0.5">
+                        <div className="flex items-center justify-between text-slate-600 dark:text-slate-300">
+                            <span className="text-slate-400">今日创作量（约）</span>
+                            <span className="font-medium" title={`输入 ${usage?.today?.input_tokens?.toLocaleString() || 0} + 输出 ${usage?.today?.output_tokens?.toLocaleString() || 0} tokens`}>
+                                {tokensToChars((usage?.today?.input_tokens || 0) + (usage?.today?.output_tokens || 0))}
                             </span>
-                            {usage?.last_request && (
-                                <span className="text-slate-400">
-                                    上次: <span className={`font-mono ${(usage.last_request.input_tokens || 0) > 30000 ? 'text-red-500 font-bold' : 'text-green-600'}`}>+{usage.last_request.input_tokens?.toLocaleString()}</span>/<span className={`font-mono ${(usage.last_request.output_tokens || 0) > 5000 ? 'text-red-500 font-bold' : 'text-blue-600'}`}>+{usage.last_request.output_tokens?.toLocaleString()}</span>
-                                </span>
-                            )}
                         </div>
-                        {/* Warning for high token usage */}
-                        {usage?.last_request && ((usage.last_request.input_tokens || 0) > 30000 || (usage.last_request.output_tokens || 0) > 5000) && (
-                            <div className="text-amber-600 dark:text-amber-400 text-xs flex items-center gap-1 mt-1">
-                                ⚠️ Token 用量过高，请检查提示词
+                        {usage?.last_request && (
+                            <div className="flex items-center justify-between text-slate-400">
+                                <span>上次请求</span>
+                                <span title={`输入 ${usage.last_request.input_tokens?.toLocaleString() || 0} + 输出 ${usage.last_request.output_tokens?.toLocaleString() || 0} tokens`}>
+                                    +{tokensToChars((usage.last_request.input_tokens || 0) + (usage.last_request.output_tokens || 0))}
+                                </span>
                             </div>
                         )}
                     </div>

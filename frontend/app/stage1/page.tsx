@@ -2,7 +2,8 @@
 
 import { useEffect, useState } from "react";
 import { useProject } from "@/lib/contexts/project-context";
-import { api } from "@/lib/api";
+import { api, getAuthHeaders } from "@/lib/api";
+import { useLatestRequest, useUnloadGuard } from "@/lib/hooks/use-request-guard";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
@@ -17,10 +18,12 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
 import { WorldBible } from "@/components/world-bible";
+import { StageNav } from "@/components/stage-nav";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
 
 export default function Stage1Page() {
     const { activeProject, isLoading } = useProject();
+    const loadGuard = useLatestRequest();
 
     // Inputs
     const [concept, setConcept] = useState("");
@@ -47,7 +50,7 @@ export default function Stage1Page() {
     const loadDefaultTemplate = async () => {
         try {
             const baseUrl = process.env.NEXT_PUBLIC_API_URL || '';
-            const res = await fetch(`${baseUrl}/api/stage1/concept-template`);
+            const res = await fetch(`${baseUrl}/api/stage1/concept-template`, { headers: getAuthHeaders() });
             if (res.ok) {
                 const template = await res.text();
                 setConcept(template);
@@ -77,6 +80,8 @@ export default function Stage1Page() {
 
     // AI Polish concept
     const [isPolishing, setIsPolishing] = useState(false);
+
+    useUnloadGuard(isGeneratingSyn || isGeneratingOut || isGeneratingDetail || isPolishing);
     const handlePolishConcept = async () => {
         if (!activeProject || !concept.trim()) return;
         setIsPolishing(true);
@@ -85,7 +90,7 @@ export default function Stage1Page() {
             const res = await api.post("/api/stage1/concept/polish", {
                 project_name: activeProject.name,
                 concept: concept
-            });
+            }, { timeoutMs: 5 * 60 * 1000 });
             if (res.success && res.data?.polished_concept) {
                 setConcept(res.data.polished_concept);
                 toast.success("润色完成！");
@@ -125,8 +130,10 @@ export default function Stage1Page() {
 
     const loadData = async () => {
         if (!activeProject) return;
+        const seq = loadGuard.next();
         try {
             const res = await api.get(`/api/stage1/${activeProject.name}/data`);
+            if (loadGuard.isStale(seq)) return;
             if (res.synopsis) setSynopsisData(res.synopsis);
             if (res.outline) setOutlineData(res.outline);
             if (res.detailed_cards) setDetailedCards(res.detailed_cards);
@@ -138,6 +145,7 @@ export default function Stage1Page() {
                 setConcept("");  // No saved concept, start empty
             }
         } catch (e) {
+            if (loadGuard.isStale(seq)) return;
             console.error("Failed to load stage1 data");
             setConcept("");  // On error, start empty
         }
@@ -151,14 +159,14 @@ export default function Stage1Page() {
         }
 
         setIsGeneratingSyn(true);
-        toast.info("请求已发送，正在调用 AI 模型...");
+        toast.info("请求已发送，正在调用 AI 模型...（预计需要一两分钟）");
 
         try {
             console.log("Sending generate request...");
             const res = await api.post("/api/stage1/synopsis/generate", {
                 project_name: activeProject.name,
                 concept
-            });
+            }, { timeoutMs: 10 * 60 * 1000 });
             console.log("Generate response:", res);
 
             if (res.success && res.data) {
@@ -187,7 +195,7 @@ export default function Stage1Page() {
                 project_name: activeProject.name,
                 synopsis_data: synopsisData,
                 concept    // Pass user input to save before generation
-            });
+            }, { timeoutMs: 10 * 60 * 1000 });
 
             if (res.success && res.data) {
                 setOutlineData(res.data);
@@ -276,7 +284,7 @@ export default function Stage1Page() {
                 card_indices: cardIndices,
                 concept,    // Pass user input to save before generation
                 detail_instruction: detailInstruction  // User's custom instruction
-            });
+            }, { timeoutMs: 10 * 60 * 1000 });
 
             console.log("Step 3 API response:", res);
 
@@ -379,7 +387,9 @@ export default function Stage1Page() {
     }
 
     return (
-        <div className="h-full flex flex-col space-y-4 p-6">
+        <div className="h-full flex flex-col">
+            <StageNav current={1} />
+            <div className="flex-1 flex flex-col space-y-4 p-6 overflow-hidden">
             <div className="flex items-center justify-between shrink-0">
                 <div>
                     <h1 className="text-2xl font-bold tracking-tight">Stage 1: 创意孵化 Idea Lab</h1>
@@ -552,7 +562,7 @@ export default function Stage1Page() {
                             <div className="p-6 space-y-8 max-w-4xl mx-auto">
                                 {/* Synopsis Section */}
                                 <section className="space-y-4">
-                                    <h2 className="text-xl font-bold border-l-4 border-primary pl-3">剧情梗概</h2>
+                                    <h2 className="text-xl font-bold">剧情梗概</h2>
 
                                     <div className="grid grid-cols-2 gap-4">
                                         <div className="space-y-2">
@@ -648,7 +658,7 @@ export default function Stage1Page() {
                                 {/* Outline Section */}
                                 {outlineData && (
                                     <section className="space-y-4">
-                                        <h2 className="text-xl font-bold border-l-4 border-blue-500 pl-3">粗大纲 (8 Cards)</h2>
+                                        <h2 className="text-xl font-bold">粗大纲 (8 Cards)</h2>
 
                                         <div className="space-y-4">
                                             {(outlineData.rough_skeleton || []).map((card: any, idx: number) => (
@@ -672,7 +682,7 @@ export default function Stage1Page() {
                                 {/* Detailed Cards Section (Step 3) */}
                                 {detailedCards.length > 0 && (
                                     <section className="space-y-4">
-                                        <h2 className="text-xl font-bold border-l-4 border-green-500 pl-3">详细卡纲 (Step 3)</h2>
+                                        <h2 className="text-xl font-bold">详细卡纲 (Step 3)</h2>
 
                                         <div className="space-y-6">
                                             {detailedCards.map((card: any, cardIdx: number) => (
@@ -793,7 +803,7 @@ export default function Stage1Page() {
 
                                                 {/* Main Synopsis */}
                                                 <div className="prose dark:prose-invert max-w-none">
-                                                    <h3 className="font-semibold text-xl mb-3 border-l-4 border-primary pl-3">故事主线</h3>
+                                                    <h3 className="font-semibold text-xl mb-3">故事主线</h3>
                                                     <div className="whitespace-pre-wrap text-base leading-7 text-slate-800 dark:text-slate-200">
                                                         {synopsisData.synopsis || synopsisData.synopsis_main}
                                                     </div>
@@ -802,7 +812,7 @@ export default function Stage1Page() {
                                                 {/* Characters */}
                                                 {synopsisData.characters && synopsisData.characters.length > 0 && (
                                                     <div className="space-y-4 pt-4 border-t">
-                                                        <h3 className="font-semibold text-xl mb-3 border-l-4 border-blue-500 pl-3">主要人物</h3>
+                                                        <h3 className="font-semibold text-xl mb-3">主要人物</h3>
                                                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                                                             {synopsisData.characters.map((char: any, i: number) => (
                                                                 <Card key={i} className="shadow-sm">
@@ -850,7 +860,7 @@ export default function Stage1Page() {
                                             <div className="space-y-6">
                                                 {(outlineData.rough_skeleton || outlineData.beats)?.map((card: any, idx: number) => (
                                                     <div key={idx} className="prose dark:prose-invert max-w-none">
-                                                        <h4 className="font-semibold text-base mb-2 border-l-4 border-blue-500 pl-3 flex items-center gap-2">
+                                                        <h4 className="font-semibold text-base mb-2 flex items-center gap-2">
                                                             <span className="text-blue-600 dark:text-blue-400">卡 {card.card_id || idx + 1}</span>
                                                             {card.name && <span className="text-slate-600 dark:text-slate-300">• {card.name}</span>}
                                                         </h4>
@@ -994,6 +1004,7 @@ export default function Stage1Page() {
                     )}
                 </Panel>
             </Group>
+            </div>
         </div>
     );
 }

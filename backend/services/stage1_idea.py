@@ -1,11 +1,11 @@
 """
 Stage 1 Service: Idea Incubation
-Refactored with clear cache logic separation.
 
-Three operations per step:
-1. build_cache() - Create cache, save to settings
-2. generate_without_cache() - Full system + context + user
-3. generate_with_cache() - User only, reuse cache
+Steps:
+1. Synopsis Generation (concept → synopsis)
+2. Rough Outline Generation (synopsis → 8-card outline)
+3. Detailed Card Outlines (outline → detailed cards)
+4. Concept Polish
 """
 import os
 from services.base import BaseService
@@ -15,34 +15,34 @@ from typing import Dict, Any, Optional
 class Stage1Service(BaseService):
     """
     Service Controller for Stage 1: Idea Incubation.
-    
+
     Step 1: Synopsis Generation (concept → synopsis)
     Step 2: Rough Outline Generation (synopsis → 8-card outline)
     """
-    
+
     def __init__(self):
         super().__init__()
-        
-        # === Unified Templates (shared cache) ===
+
+        # === Templates ===
         self.TMPL_SYS = "stage1/1_sys.j2"
         self.TMPL_DTG = "stage1/2_dtg.j2"
-        
+
         # === Step-specific User Prompts ===
         self.TMPL_SYNOPSIS_USER = "stage1/3_synopsis_user.j2"
         self.TMPL_ROUGH_USER = "stage1/4_rough_user.j2"
         self.TMPL_DETAIL_USER = "stage1/5_detail_user.j2"
         self.TMPL_POLISH_USER = "stage1/6_polish_user.j2"
-        
+
         # DTG Files
         self.DTG_FILES = [
             "dtgCore_2025_1222_0001.md",
             "dtgFramework_2025_1223_0001.md",
             "dtgModels_2025_1223_0001.md",
         ]
-        
+
         # Schema for save validation (Step 3)
         self.SCHEMA_DETAILED_CARDS = "prompts/stage1/schema_step3.json"
-        
+
         # API Response Schema for Step 3 (structured output enforcement)
         # Note: Simplified schema without 'description' fields for LLM compatibility
         self.RESPONSE_SCHEMA_DETAILED = {
@@ -75,7 +75,7 @@ class Stage1Service(BaseService):
             },
             "required": ["detailed_cards"]
         }
-        
+
         # API Response Schema for Concept Polish (structured output enforcement)
         self.RESPONSE_SCHEMA_POLISH = {
             "type": "object",
@@ -95,246 +95,123 @@ class Stage1Service(BaseService):
     # =========================================================================
     # STEP 1: SYNOPSIS
     # =========================================================================
-    
-    def build_cache(
-        self, 
-        model_key: str, 
-        project_name: str, 
-        ttl_seconds: int = 600
-    ) -> str:
-        """
-        Build unified cache for Stage 1 (used by both Synopsis and Rough steps).
-        
-        Cache contains:
-        - system_content: Unified System Prompt (role + drama knowledge)
-        - context_contents: DTG theory
-        """
-        # 1. Render prompts
-        dtg_raw = self._prepare_dtg_content()
-        sys_content = self.prompts.render(self.TMPL_SYS)
-        dtg_content = self.prompts.render(self.TMPL_DTG, full_context=dtg_raw)
-        
-        # 2. Create cache via BaseService
-        cache_name = self.ensure_cache(
-            model_key=model_key,
-            display_name=f"stage1_cache_{project_name}",
-            system_content=sys_content,
-            context_contents=[dtg_content],
-            ttl_seconds=ttl_seconds
-        )
-        
-        # 3. Save cache_name to project settings (unified key)
-        self._save_unified_cache_to_settings(project_name, cache_name)
-        
-        return cache_name
-    
+
     def generate_synopsis(
         self,
         project_name: str,
         concept: str,
-        model_key: Optional[str] = None,
-        use_cache: bool = False,
-        cache_name: Optional[str] = None,
         temperature: float = 0.7
     ) -> Dict:
-        """
-        Generate synopsis (dispatcher).
-        
-        If use_cache=True and cache_name provided: use cached path
-        Otherwise: use full path with system + context
-        """
-        # Render user prompt (always needed) - reference removed, only concept used
+        """Generate synopsis (concept → synopsis)."""
         user_content = self.prompts.render(
             self.TMPL_SYNOPSIS_USER,
             concept=concept,
             full_context=""
         )
-        
-        # Save user input for later use (Step 2) - only concept now
-        self._save_user_input(project_name, concept)
-        
-        # Get model from settings if not provided
-        if not model_key:
-            settings = self.projects.get_settings(project_name)
-            stage_cfg = settings.get("stage1", {})
-            model_key, temperature = self.resolve_model_key(project_name, "stage1")
 
-            use_cache = stage_cfg.get("useCache", False)
-            cache_name = stage_cfg.get("cacheName") if use_cache else None  # Unified cache key
-        
-        # Dispatch
-        if use_cache and cache_name:
-            return self._generate_synopsis_cached(model_key, user_content, cache_name, temperature)
-        else:
-            return self._generate_synopsis_raw(model_key, user_content, temperature)
-    
-    def _generate_synopsis_cached(
-        self, 
-        model_key: str, 
-        user_content: str, 
-        cache_name: str,
-        temperature: float
-    ) -> Dict:
-        """Cached path: only user prompt, cache handles system + context."""
-        return self.process_request(
-            model_key=model_key,
-            user_content=user_content,
-            cache_name=cache_name,
-            temperature=temperature,
-            source="stage1/synopsis/cached"
-        )
-    
-    def _generate_synopsis_raw(
-        self, 
-        model_key: str, 
-        user_content: str,
-        temperature: float
-    ) -> Dict:
-        """Raw path: full system + context + user."""
+        # Save user input for later use (Step 2)
+        self._save_user_input(project_name, concept)
+
+        model_key, temperature = self.resolve_model_key(project_name, "stage1")
+
         dtg_raw = self._prepare_dtg_content()
         sys_content = self.prompts.render(self.TMPL_SYS)
         dtg_content = self.prompts.render(self.TMPL_DTG, full_context=dtg_raw)
-        
+
         return self.process_request(
             model_key=model_key,
             user_content=user_content,
             system_content=sys_content,
             context_content=dtg_content,
             temperature=temperature,
-            source="stage1/synopsis/raw"
+            source="stage1/synopsis"
         )
 
     # =========================================================================
-    # STEP 2: ROUGH OUTLINE (uses same cache as Synopsis)
+    # STEP 2: ROUGH OUTLINE
     # =========================================================================
-    
+
     def generate_rough_outline(
         self,
         project_name: str,
         synopsis_data: Dict,
         concept: Optional[str] = None,
-        model_key: Optional[str] = None,
-        use_cache: bool = False,
-        cache_name: Optional[str] = None,
         temperature: float = 0.7
     ) -> Dict:
-        """
-        Generate rough outline (dispatcher).
-        """
-        # Save user input if provided (only concept now)
+        """Generate rough outline (synopsis → 8-card outline)."""
+        # Save user input if provided
         if concept is not None:
             self._save_user_input(project_name, concept)
-        
+
         # Load user input for template
         user_input = self._load_user_input(project_name)
         concept_val = user_input.get("concept", "")
-        
-        # Render user prompt (reference removed)
+
         user_content = self.prompts.render(
             self.TMPL_ROUGH_USER,
             prev_data=synopsis_data,
             concept=concept_val,
             full_context=""
         )
-        
-        # Get model from settings if not provided
-        if not model_key:
-            settings = self.projects.get_settings(project_name)
-            stage_cfg = settings.get("stage1", {})
-            model_key, temperature = self.resolve_model_key(project_name, "stage1")
 
-            use_cache = stage_cfg.get("useCache", False)
-            cache_name = stage_cfg.get("cacheName") if use_cache else None  # Same cache as Synopsis
-        
-        # Dispatch
-        if use_cache and cache_name:
-            return self._generate_rough_cached(model_key, user_content, cache_name, temperature)
-        else:
-            return self._generate_rough_raw(model_key, user_content, temperature)
-    
-    def _generate_rough_cached(
-        self, 
-        model_key: str, 
-        user_content: str, 
-        cache_name: str,
-        temperature: float
-    ) -> Dict:
-        """Cached path."""
-        return self.process_request(
-            model_key=model_key,
-            user_content=user_content,
-            cache_name=cache_name,
-            temperature=temperature,
-            source="stage1/rough/cached"
-        )
-    
-    def _generate_rough_raw(
-        self, 
-        model_key: str, 
-        user_content: str,
-        temperature: float
-    ) -> Dict:
-        """Raw path (uses same templates as Synopsis)."""
+        model_key, temperature = self.resolve_model_key(project_name, "stage1")
+
         dtg_raw = self._prepare_dtg_content()
         sys_content = self.prompts.render(self.TMPL_SYS)
         dtg_content = self.prompts.render(self.TMPL_DTG, full_context=dtg_raw)
-        
+
         return self.process_request(
             model_key=model_key,
             user_content=user_content,
             system_content=sys_content,
             context_content=dtg_content,
             temperature=temperature,
-            source="stage1/rough/raw"
+            source="stage1/rough"
         )
 
     # =========================================================================
-    # STEP 3: DETAILED CARDS (uses same cache as Synopsis/Rough)
+    # STEP 3: DETAILED CARDS
     # =========================================================================
-    
+
     def generate_detailed_cards(
         self,
         project_name: str,
         card_indices: list,
         concept: Optional[str] = None,
         detail_instruction: Optional[str] = None,
-        model_key: Optional[str] = None,
-        use_cache: bool = False,
-        cache_name: Optional[str] = None,
         temperature: float = 0.7
     ) -> Dict:
         """
         Generate detailed card outlines (Step 3).
-        
+
         Args:
             card_indices: List of card indices (0-7) to generate, e.g. [0, 1] for cards 1-2
             concept: User input - core concept (optional, will save if provided)
             detail_instruction: User's custom instruction (highest priority)
         """
-        # Save user input if provided (only concept now)
+        # Save user input if provided
         if concept is not None:
             self._save_user_input(project_name, concept)
-        
+
         # Load rough skeleton for context
         story_bible = self._load_story_bible(project_name)
         rough_skeleton = story_bible.get("rough_skeleton", [])
         if not rough_skeleton:
             raise ValueError("请先生成粗大纲 (Step 2)")
-        
+
         # Load synopsis for context (Step 1 data)
         synopsis = story_bible.get("synopsis", {})
-        
+
         # Load user input for template
         user_input = self._load_user_input(project_name)
         concept_val = user_input.get("concept", "")
-        
+
         # Load existing detailed cards for incremental context
         existing_detailed = story_bible.get("detailed_cards", [])
-        
+
         # Convert indices to card_ids (1-based)
         card_ids = [idx + 1 for idx in card_indices]
-        
-        # Render user prompt (reference removed)
+
         user_content = self.prompts.render(
             self.TMPL_DETAIL_USER,
             card_ids=card_ids,
@@ -344,95 +221,27 @@ class Stage1Service(BaseService):
             rough_skeleton=rough_skeleton,
             existing_detailed_cards=existing_detailed if existing_detailed else None
         )
-        
-        # Get model from settings if not provided
-        if not model_key:
-            settings = self.projects.get_settings(project_name)
-            stage_cfg = settings.get("stage1", {})
-            model_key, temperature = self.resolve_model_key(project_name, "stage1")
 
-            use_cache = stage_cfg.get("useCache", False)
-            cache_name = stage_cfg.get("cacheName") if use_cache else None
-        
-        # Dispatch
-        if use_cache and cache_name:
-            return self._generate_detailed_cached(model_key, user_content, cache_name, temperature)
-        else:
-            return self._generate_detailed_raw(model_key, user_content, temperature)
-    
-    def _generate_detailed_cached(
-        self, 
-        model_key: str, 
-        user_content: str, 
-        cache_name: str,
-        temperature: float
-    ) -> Dict:
-        """Cached path for detailed cards."""
-        return self.process_request(
-            model_key=model_key,
-            user_content=user_content,
-            cache_name=cache_name,
-            temperature=temperature,
-            source="stage1/detailed/cached",
-            response_schema=self.RESPONSE_SCHEMA_DETAILED
-        )
-    
-    def _generate_detailed_raw(
-        self, 
-        model_key: str, 
-        user_content: str,
-        temperature: float
-    ) -> Dict:
-        """Raw path for detailed cards (uses same templates as Synopsis/Rough)."""
+        model_key, temperature = self.resolve_model_key(project_name, "stage1")
+
         dtg_raw = self._prepare_dtg_content()
         sys_content = self.prompts.render(self.TMPL_SYS)
         dtg_content = self.prompts.render(self.TMPL_DTG, full_context=dtg_raw)
-        
+
         return self.process_request(
             model_key=model_key,
             user_content=user_content,
             system_content=sys_content,
             context_content=dtg_content,
             temperature=temperature,
-            source="stage1/detailed/raw",
+            source="stage1/detailed",
             response_schema=self.RESPONSE_SCHEMA_DETAILED
         )
 
     # =========================================================================
-    # SETTINGS HELPER
+    # DATA PERSISTENCE
     # =========================================================================
-    
-    def _save_unified_cache_to_settings(self, project_name: str, cache_name: str):
-        """Save unified cache_name to project settings."""
-        settings = self.projects.get_settings(project_name)
-        if "stage1" not in settings:
-            settings["stage1"] = {}
-        
-        # Use unified key: cacheName (used by both Synopsis and Rough)
-        settings["stage1"]["cacheName"] = cache_name
-        self.projects.save_settings(project_name, settings)
-        print(f"✅ Stage1 unified cache saved: cacheName = {cache_name}")
 
-    def _save_cache_to_settings(
-        self, 
-        project_name: str, 
-        stage_id: str, 
-        step_id: str, 
-        cache_name: str
-    ):
-        """Save cache_name to project settings (legacy, kept for compatibility)."""
-        settings = self.projects.get_settings(project_name)
-        if stage_id not in settings:
-            settings[stage_id] = {}
-        
-        settings[stage_id][f"{step_id}CacheName"] = cache_name
-        self.projects.save_settings(project_name, settings)
-        print(f"✅ Cache saved to settings: {stage_id}.{step_id}CacheName = {cache_name}")
-
-    # =========================================================================
-    # DATA PERSISTENCE (unchanged)
-    # =========================================================================
-    
     def _get_story_bible_path(self, project_name: str) -> str:
         """Get absolute path to story_bible.json for a project."""
         project_dir = self.projects.get_project_path(project_name)
@@ -472,23 +281,23 @@ class Stage1Service(BaseService):
         If empty array is passed, clears all detailed_cards.
         """
         story_bible = self._load_story_bible(project_name)
-        
+
         # Extract new cards from response
         new_cards = data.get("detailed_cards", data) if isinstance(data, dict) else data
         if not isinstance(new_cards, list):
             new_cards = [new_cards]
-        
+
         # If empty array, clear all detailed cards
         if len(new_cards) == 0:
             story_bible["detailed_cards"] = []
             return self._save_story_bible(project_name, story_bible)
-        
+
         # Validate new cards against schema before saving
         # Schema expects {"detailed_cards": [...]} structure
         valid, msg = self.files.validate_json({"detailed_cards": new_cards}, self.SCHEMA_DETAILED_CARDS)
         if not valid:
             raise ValueError(f"详细卡纲格式验证失败: {msg}")
-        
+
         # Merge by card_id
         existing = story_bible.get("detailed_cards", [])
         existing_by_id = {c.get("card_id"): c for c in existing}
@@ -496,7 +305,7 @@ class Stage1Service(BaseService):
             card_id = card.get("card_id")
             if card_id:
                 existing_by_id[card_id] = card
-        
+
         # Sort by card_id and save
         merged = sorted(existing_by_id.values(), key=lambda c: int(c.get("card_id", 0)))
         story_bible["detailed_cards"] = merged
@@ -505,20 +314,20 @@ class Stage1Service(BaseService):
     # =========================================================================
     # USER INPUT PERSISTENCE
     # =========================================================================
-    
+
     def _get_user_input_path(self, project_name: str) -> str:
         """Get absolute path to user_input.json for a project."""
         project_dir = self.projects.get_project_path(project_name)
         if not project_dir:
             raise ValueError(f"Project {project_name} not found")
         return os.path.join(project_dir, "1_ideas/user_input.json")
-    
+
     def _save_user_input(self, project_name: str, concept: str) -> bool:
         """Save user input (concept only) to user_input.json."""
         path = self._get_user_input_path(project_name)
         data = {"concept": concept}
         return self.files.save_json(path, data)
-    
+
     def _load_user_input(self, project_name: str) -> Dict:
         """Load user input from user_input.json."""
         try:
@@ -531,7 +340,7 @@ class Stage1Service(BaseService):
         """Load synopsis, outline, and user input from project files."""
         story_bible = self._load_story_bible(project_name)
         user_input = self._load_user_input(project_name)
-        
+
         raw_skeleton = story_bible.get("rough_skeleton")
         if isinstance(raw_skeleton, dict) and "rough_skeleton" in raw_skeleton:
             skeleton_array = raw_skeleton.get("rough_skeleton")
@@ -539,7 +348,7 @@ class Stage1Service(BaseService):
             skeleton_array = raw_skeleton
         else:
             skeleton_array = None
-        
+
         return {
             "synopsis": story_bible.get("synopsis"),
             "outline": {"rough_skeleton": skeleton_array} if skeleton_array else None,
@@ -548,27 +357,19 @@ class Stage1Service(BaseService):
         }
 
     # =========================================================================
-    # CONCEPT POLISH (uses same cache as Synopsis/Rough)
+    # CONCEPT POLISH
     # =========================================================================
-    
+
     def polish_concept(
         self,
         project_name: str,
         concept: str,
-        model_key: Optional[str] = None,
-        use_cache: bool = False,
-        cache_name: Optional[str] = None,
         temperature: float = 0.7
     ) -> Dict:
-        """
-        Polish concept using AI (dispatcher).
-        
-        Uses the same cache/non-cache logic as other generation methods.
-        Returns JSON with polished_concept field.
-        """
+        """Polish concept using AI. Returns JSON with polished_concept field."""
         # Load concept template as example
         template_path = os.path.join(
-            os.path.dirname(os.path.dirname(__file__)), 
+            os.path.dirname(os.path.dirname(__file__)),
             "prompts", "stage1", "concept_template.md"
         )
         try:
@@ -576,64 +377,25 @@ class Stage1Service(BaseService):
                 template_example = f.read()
         except FileNotFoundError:
             template_example = "(模板文件未找到)"
-        
-        # Render user prompt
+
         user_content = self.prompts.render(
             self.TMPL_POLISH_USER,
             template_example=template_example,
             concept=concept
         )
-        
-        # Get model from settings if not provided (same logic as generate_synopsis)
-        if not model_key:
-            settings = self.projects.get_settings(project_name)
-            stage_cfg = settings.get("stage1", {})
-            model_key, temperature = self.resolve_model_key(project_name, "stage1")
 
-            use_cache = stage_cfg.get("useCache", False)
-            cache_name = stage_cfg.get("cacheName") if use_cache else None  # Unified cache key
-        
-        # Dispatch (same pattern as other generation methods)
-        if use_cache and cache_name:
-            return self._polish_cached(model_key, user_content, cache_name, temperature)
-        else:
-            return self._polish_raw(model_key, user_content, temperature)
-    
-    def _polish_cached(
-        self, 
-        model_key: str, 
-        user_content: str, 
-        cache_name: str,
-        temperature: float
-    ) -> Dict:
-        """Cached path for polish: only user prompt, cache handles system + context."""
-        return self.process_request(
-            model_key=model_key,
-            user_content=user_content,
-            cache_name=cache_name,
-            temperature=temperature,
-            source="stage1/polish/cached",
-            response_schema=self.RESPONSE_SCHEMA_POLISH
-        )
-    
-    def _polish_raw(
-        self, 
-        model_key: str, 
-        user_content: str,
-        temperature: float
-    ) -> Dict:
-        """Raw path for polish: full system + context + user."""
+        model_key, temperature = self.resolve_model_key(project_name, "stage1")
+
         dtg_raw = self._prepare_dtg_content()
         sys_content = self.prompts.render(self.TMPL_SYS)
         dtg_content = self.prompts.render(self.TMPL_DTG, full_context=dtg_raw)
-        
+
         return self.process_request(
             model_key=model_key,
             user_content=user_content,
             system_content=sys_content,
             context_content=dtg_content,
             temperature=temperature,
-            source="stage1/polish/raw",
+            source="stage1/polish",
             response_schema=self.RESPONSE_SCHEMA_POLISH
         )
-

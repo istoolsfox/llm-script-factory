@@ -43,6 +43,14 @@ if [ ! -d ".next" ]; then
         exit 1
     }
     echo "   Frontend build complete"
+elif [ -n "$(find app components lib public package.json next.config.ts -newer .next/BUILD_ID 2>/dev/null | head -1)" ]; then
+    echo "   Source changed since last build. Rebuilding frontend..."
+    npm run build > ../frontend-build.log 2>&1 || {
+        echo "[ERROR] Frontend build failed. See frontend-build.log"
+        kill $BACKEND_PID 2>/dev/null
+        exit 1
+    }
+    echo "   Frontend build complete"
 fi
 
 npm run start > ../frontend.log 2>&1 &

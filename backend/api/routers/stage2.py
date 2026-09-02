@@ -1,6 +1,6 @@
 """
 Stage 2 API Router: Structure & Outline
-Refactored with clear cache build endpoint.
+FastAPI routes for this stage.
 """
 from fastapi import APIRouter, HTTPException
 from typing import List, Dict, Any, Optional
@@ -9,30 +9,11 @@ from api.schemas import (
     Stage2BatchGenerateRequest,
     Stage2BatchSaveRequest,
     Stage2EpisodeSaveRequest,
-    Stage2CacheBuildRequest,
     Stage2RefineRequest
 )
 
 router = APIRouter(prefix="/api/stage2", tags=["stage2"])
 service = Stage2Service()
-
-
-# =============================================================================
-# CACHE BUILD ENDPOINT
-# =============================================================================
-
-@router.post("/cache/build")
-def build_cache(payload: Stage2CacheBuildRequest):
-    """Build cache for Stage 2."""
-    try:
-        cache_name = service.build_cache(
-            model_key=payload.model_key,
-            project_name=payload.project_name,
-            ttl_seconds=payload.ttl_seconds
-        )
-        return {"success": True, "cache_name": cache_name}
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
 
 
 # =============================================================================
@@ -56,7 +37,7 @@ def load_stage2_data(project_name: str):
 
 @router.post("/batch/generate")
 def generate_batch(payload: Stage2BatchGenerateRequest):
-    """Generate detailed outlines for a story unit (auto-detects cache from settings)."""
+    """Generate detailed outlines for a story unit ."""
     try:
         result = service.generate_batch(
             project_name=payload.project_name,

@@ -1,17 +1,15 @@
 """
 Stage 6 Service: Script Doctor
-Refactored with clear cache logic separation.
 
 Prompt Structure:
-- 1_sys_doctor.j2: System Prompt (cached)
-- 2_context_static.j2: DTG + Story Bible (cached)
+- 1_sys_doctor.j2: System Prompt
+- 2_context_static.j2: DTG + Story Bible
 - 3_analyze_user.j2: Analysis User Prompt (dynamic)
 - 4_refine_user.j2: Refine User Prompt (dynamic)
 
 Operations:
-1. build_cache() - Create cache with 1 + 2, save to settings
-2. analyze_episode() - Dispatch to cached/raw, uses 3
-3. refine_episode() - Dispatch to cached/raw, uses 4
+1. analyze_episode() - uses 1 + 2 + 3
+2. refine_episode() - uses 1 + 2 + 4
 """
 import os
 import json
@@ -55,112 +53,30 @@ class Stage6Service(BaseService):
         return self.prompts.load_dtg_theory(branch="dtg/Distill-1", file_list=self.DTG_FILES)
 
     # =========================================================================
-    # CACHE BUILD
-    # =========================================================================
-    def build_cache(
-        self, 
-        model_key: str, 
-        project_name: str, 
-        ttl_seconds: int = 7200  # 2 hours default for Stage 6
-    ) -> str:
-        """
-        Build cache for Stage 6.
-        
-        Cache contains:
-        - system_content: TMPL_SYS (1_sys_doctor.j2)
-        - context_contents: TMPL_CTX (2_context_static.j2 with DTG + Story Bible)
-        """
-        # 1. Load Story Bible and User Input
-        story_bible = self.load_story_bible(project_name)
-        user_input = self._load_user_input(project_name)
-        
-        # 2. Render prompts
-        sys_content = self.prompts.render(self.TMPL_SYS)
-        full_dtg = self._prepare_dtg_content()
-        ctx_content = self.prompts.render(
-            self.TMPL_CTX,
-            dtg_context=full_dtg,
-            story_bible=story_bible,
-            user_input=user_input
-        )
-        
-        # 3. Create cache via BaseService
-        cache_name = self.ensure_cache(
-            model_key=model_key,
-            display_name=f"stage6_cache_{project_name}",
-            system_content=sys_content,
-            context_contents=[ctx_content],
-            ttl_seconds=ttl_seconds
-        )
-        
-        # 4. Save cache_name to project settings
-        self._save_cache_to_settings(project_name, cache_name)
-        
-        return cache_name
-
-    def _save_cache_to_settings(self, project_name: str, cache_name: str):
-        """Save cache_name to project settings."""
-        settings = self.projects.get_settings(project_name)
-        if "stage6" not in settings:
-            settings["stage6"] = {}
-        settings["stage6"]["cacheName"] = cache_name
-        self.projects.save_settings(project_name, settings)
-        print(f"✅ Stage6 cache saved to settings: {cache_name}")
-
-    # =========================================================================
-    # ANALYZE EPISODE (dispatcher)
+    # ANALYZE EPISODE
     # =========================================================================
     def analyze_episode(
         self,
         project_name: str,
         current_script: str,
-        model_key: Optional[str] = None,
-        use_cache: bool = False,
-        cache_name: Optional[str] = None,
         temperature: float = 0.7
     ) -> Dict[str, str]:
         """
         Run 6-Dimension Analysis on a single episode.
-        Dispatches to cached or raw path based on settings.
         """
         # 1. Render user prompt (3_analyze_user.j2)
         user_content = self.prompts.render(
             self.TMPL_ANALYZE,
             current_script=current_script
         )
-        
-        # 2. Get model from settings if not provided
-        if not model_key:
-            settings = self.projects.get_settings(project_name)
-            stage_cfg = settings.get("stage6", {})
-            model_key, temperature = self.resolve_model_key(project_name, "stage6")
 
-            use_cache = stage_cfg.get("useCache", False)
-            cache_name = stage_cfg.get("cacheName") if use_cache else None
-        
-        # 3. Dispatch
-        if use_cache and cache_name:
-            return self._analyze_cached(model_key, user_content, cache_name, temperature)
-        else:
-            story_bible = self.load_story_bible(project_name)
-            return self._analyze_raw(model_key, user_content, story_bible, project_name, temperature)
-    
-    def _analyze_cached(
-        self, 
-        model_key: str, 
-        user_content: str, 
-        cache_name: str,
-        temperature: float
-    ) -> Dict[str, str]:
-        """Cached path: only user prompt (3), cache handles 1 + 2."""
-        return self.process_request(
-            model_key=model_key,
-            user_content=user_content,
-            cache_name=cache_name,
-            temperature=temperature,
-            source="stage6/analyze/cached"
-        )
-    
+        # 2. Resolve model from project settings
+        model_key, temperature = self.resolve_model_key(project_name, "stage6")
+
+        # 3. Generate
+        story_bible = self.load_story_bible(project_name)
+        return self._analyze_raw(model_key, user_content, story_bible, project_name, temperature)
+
     def _analyze_raw(
         self, 
         model_key: str, 
@@ -190,7 +106,7 @@ class Stage6Service(BaseService):
         )
 
     # =========================================================================
-    # REFINE EPISODE (dispatcher)
+    # REFINE EPISODE
     # =========================================================================
     def refine_episode(
         self,
@@ -200,14 +116,10 @@ class Stage6Service(BaseService):
         custom_instruction: str = "",
         prev_summary: str = "",
         next_summary: str = "",
-        model_key: Optional[str] = None,
-        use_cache: bool = False,
-        cache_name: Optional[str] = None,
         temperature: float = 0.7
     ) -> Dict:
         """
         Refine the episode based on instructions.
-        Dispatches to cached or raw path based on settings.
         """
         # 1. Render user prompt (4_refine_user.j2)
         user_content = self.prompts.render(
@@ -218,42 +130,17 @@ class Stage6Service(BaseService):
             next_script_summary=next_summary,
             current_script=current_script
         )
-        
-        # 2. Get model from settings if not provided
-        if not model_key:
-            settings = self.projects.get_settings(project_name)
-            stage_cfg = settings.get("stage6", {})
-            model_key, temperature = self.resolve_model_key(project_name, "stage6")
 
-            use_cache = stage_cfg.get("useCache", False)
-            cache_name = stage_cfg.get("cacheName") if use_cache else None
-        
-        # 3. Dispatch
-        if use_cache and cache_name:
-            result = self._refine_cached(model_key, user_content, cache_name, temperature)
-        else:
-            story_bible = self.load_story_bible(project_name)
-            result = self._refine_raw(model_key, user_content, story_bible, project_name, temperature)
-        
+        # 2. Resolve model from project settings
+        model_key, temperature = self.resolve_model_key(project_name, "stage6")
+
+        # 3. Generate
+        story_bible = self.load_story_bible(project_name)
+        result = self._refine_raw(model_key, user_content, story_bible, project_name, temperature)
+
         # 4. Unwrap result
         return self._unwrap_result(result)
-    
-    def _refine_cached(
-        self, 
-        model_key: str, 
-        user_content: str, 
-        cache_name: str,
-        temperature: float
-    ) -> Any:
-        """Cached path: only user prompt (4), cache handles 1 + 2."""
-        return self.process_request(
-            model_key=model_key,
-            user_content=user_content,
-            cache_name=cache_name,
-            temperature=temperature,
-            source="stage6/refine/cached"
-        )
-    
+
     def _refine_raw(
         self, 
         model_key: str, 

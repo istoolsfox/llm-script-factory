@@ -72,8 +72,8 @@
 ### 1. 克隆项目
 
 ```bash
-git clone https://github.com/你的用户名/script-factory-ai.git
-cd script-factory-ai
+git clone https://github.com/istoolsfox/llm-script-factory.git
+cd llm-script-factory
 ```
 
 ### 2. 配置 API Key

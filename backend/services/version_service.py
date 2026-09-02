@@ -9,6 +9,7 @@ Storage layout:
         <copied data files>
 """
 import os
+import re
 import json
 import shutil
 import datetime
@@ -23,6 +24,13 @@ DATA_DIRS = [
 ]
 DATA_FILES = ["settings.json"]
 
+# version_id: timestamp + optional seq, e.g. "20260902-153000" / "20260902-153000-003".
+VERSION_ID_RE = re.compile(r"^\d{8}-\d{6}(-\d{3})?$")
+
+# Keep at most this many auto_save snapshots per project (manual snapshots are
+# never pruned) so iterative saves don't grow the versions folder without bound.
+MAX_AUTO_SNAPSHOTS = 30
+
 
 class VersionService:
     def __init__(self):
@@ -34,6 +42,21 @@ class VersionService:
     @staticmethod
     def _versions_root(project_dir: str) -> str:
         return os.path.join(project_dir, "versions")
+
+    @staticmethod
+    def _validate_version_id(version_id: str) -> None:
+        """Reject version ids that could traverse outside the versions folder."""
+        if not version_id or not VERSION_ID_RE.match(version_id):
+            raise ValueError("Invalid version id")
+
+    @staticmethod
+    def _resolve_inside(version_dir: str, relative: str) -> str:
+        """Join and verify the result stays inside version_dir."""
+        target = os.path.realpath(os.path.join(version_dir, relative))
+        root = os.path.realpath(version_dir)
+        if not target.startswith(root + os.sep):
+            raise ValueError("Invalid component path")
+        return target
 
     # =========================================================================
     # SNAPSHOT
@@ -87,7 +110,29 @@ class VersionService:
         with open(os.path.join(version_dir, "meta.json"), "w", encoding="utf-8") as fh:
             json.dump(meta, fh, ensure_ascii=False, indent=2)
 
+        if tag == "auto_save":
+            self._prune_auto_snapshots(versions_root)
+
         return meta
+
+    def _prune_auto_snapshots(self, versions_root: str, keep: int = MAX_AUTO_SNAPSHOTS):
+        """Delete the oldest auto_save snapshots beyond the retention limit."""
+        autos = []
+        for vid in os.listdir(versions_root):
+            meta_path = os.path.join(versions_root, vid, "meta.json")
+            if not os.path.isfile(meta_path):
+                continue
+            try:
+                with open(meta_path, "r", encoding="utf-8") as fh:
+                    meta = json.load(fh)
+                if meta.get("tag") == "auto_save":
+                    autos.append(vid)
+            except Exception:
+                continue
+
+        autos.sort(reverse=True)  # newest first (ids sort chronologically)
+        for vid in autos[keep:]:
+            shutil.rmtree(os.path.join(versions_root, vid), ignore_errors=True)
 
     # =========================================================================
     # LIST
@@ -118,12 +163,15 @@ class VersionService:
         Return the snapshot content of a specific path/component for a version.
         component e.g. '1_ideas/story_bible.json', 'bible.json', 'settings.json'.
         """
+        self._validate_version_id(version_id)
         project_dir = self.projects.get_project_path(project_name)
         if not project_dir:
             raise ValueError("Project not found")
         version_dir = os.path.join(self._versions_root(project_dir), version_id)
-        target = os.path.join(version_dir, component)
-        if not os.path.exists(target):
+        if not os.path.isdir(version_dir):
+            raise ValueError("Version not found")
+        target = self._resolve_inside(version_dir, component)
+        if not os.path.isfile(target):
             return {}
         try:
             with open(target, "r", encoding="utf-8") as fh:
@@ -138,7 +186,10 @@ class VersionService:
         """
         Restore the project data to a snapshot. The current state is first
         snapshotted (so undo is possible), then the version data is copied over.
+        Data directories present now but absent from the snapshot are removed,
+        so restore reproduces the snapshot state exactly.
         """
+        self._validate_version_id(version_id)
         project_dir = self.projects.get_project_path(project_name)
         if not project_dir:
             raise ValueError("Project not found")
@@ -147,12 +198,18 @@ class VersionService:
             raise ValueError("Version not found")
 
         # 1. snapshot current state to allow undo
-        current = self.snapshot(project_name, tag="before_restore")
+        self.snapshot(project_name, tag="before_restore")
 
-        # 2. copy version data back over project dir
-        for item in os.listdir(version_dir):
-            if item == "meta.json":
-                continue
+        # 2. remove current data dirs that the snapshot will replace, so stale
+        #    content from a later state doesn't survive the restore
+        snapshot_items = set(os.listdir(version_dir)) - {"meta.json"}
+        for d in DATA_DIRS:
+            dst = os.path.join(project_dir, d)
+            if d not in snapshot_items and os.path.isdir(dst):
+                shutil.rmtree(dst)
+
+        # 3. copy version data back over project dir
+        for item in snapshot_items:
             src = os.path.join(version_dir, item)
             dst = os.path.join(project_dir, item)
             if os.path.isdir(src):
@@ -168,6 +225,7 @@ class VersionService:
     # CLEANUP
     # =========================================================================
     def delete_version(self, project_name: str, version_id: str) -> bool:
+        self._validate_version_id(version_id)
         project_dir = self.projects.get_project_path(project_name)
         if not project_dir:
             raise ValueError("Project not found")

@@ -1,14 +1,17 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import Link from "next/link";
 import { useProject } from "@/lib/contexts/project-context";
 import { api } from "@/lib/api";
+import { StageNav } from "@/components/stage-nav";
+import { useLatestRequest, useUnloadGuard } from "@/lib/hooks/use-request-guard";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
-import { Loader2, Save, Play, FileText, CheckCircle2, Circle, ChevronRight, ChevronDown, Wand2, Copy, Trash2 } from "lucide-react";
+import { Loader2, ArrowRight, Save, Play, FileText, CheckCircle2, Circle, ChevronRight, ChevronDown, Wand2, Copy, Trash2 } from "lucide-react";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import {
     AlertDialog,
@@ -37,10 +40,13 @@ interface Episode {
 }
 
 const BATCH_SIZE = 3;
-const TOTAL_BATCHES = 27;
+const TOTAL_EPISODES = 80;
+const TOTAL_BATCHES = Math.ceil(TOTAL_EPISODES / BATCH_SIZE);
+const GENERATION_TIMEOUT_MS = 15 * 60 * 1000; // LLM batch generation can take minutes
 
 export default function Stage5Page() {
     const { activeProject, isLoading } = useProject();
+    const loadGuard = useLatestRequest();
 
     // Data State
     const [s4Scripts, setS4Scripts] = useState<Episode[]>([]);
@@ -60,7 +66,8 @@ export default function Stage5Page() {
     // Current batch editing state
     const [editingEpisodes, setEditingEpisodes] = useState<Episode[]>([]);
 
-    // Custom episode range for generation (defaults to current batch)
+    // Custom episode range for generation (kept in sync with the selected batch;
+    // the user can still override the numbers manually).
     const [customStartEp, setCustomStartEp] = useState<number>(1);
     const [customEndEp, setCustomEndEp] = useState<number>(BATCH_SIZE);
 
@@ -110,22 +117,27 @@ export default function Stage5Page() {
         setS4Scripts([]);
         setS5Scripts([]);
         setEditingEpisodes([]);
+        setSelectedBatchIndex(0);
     };
 
     const loadData = async () => {
         if (!activeProject) return;
+        const seq = loadGuard.next();
         try {
             // Load S4 scripts (input)
             const s4Res = await api.get(`/api/stage5/s4-scripts?project=${encodeURIComponent(activeProject.name)}`);
+            if (loadGuard.isStale(seq)) return;
             setS4Scripts(s4Res.scripts || []);
 
             // Load S5 scripts
             const s5Res = await api.get(`/api/stage5/scripts?project=${encodeURIComponent(activeProject.name)}`);
+            if (loadGuard.isStale(seq)) return;
             setS5Scripts(s5Res.scripts || []);
 
             // Initialize editing episodes for current batch
             updateEditingEpisodes(selectedBatchIndex, s5Res.scripts || []);
         } catch (e: any) {
+            if (loadGuard.isStale(seq)) return;
             console.error("Failed to load stage5 data:", e);
             toast.error("加载数据失败: " + e.message);
         }
@@ -134,11 +146,14 @@ export default function Stage5Page() {
     // Update editingEpisodes when batch selection changes
     useEffect(() => {
         updateEditingEpisodes(selectedBatchIndex, s5Scripts);
+        // Keep the custom generation range aligned with the selected batch
+        setCustomStartEp(selectedBatchIndex * BATCH_SIZE + 1);
+        setCustomEndEp(Math.min((selectedBatchIndex + 1) * BATCH_SIZE, TOTAL_EPISODES));
     }, [selectedBatchIndex, s5Scripts]);
 
     const updateEditingEpisodes = (batchIndex: number, allScripts: Episode[]) => {
         const startEp = batchIndex * BATCH_SIZE + 1;
-        const endEp = Math.min((batchIndex + 1) * BATCH_SIZE, 80);
+        const endEp = Math.min((batchIndex + 1) * BATCH_SIZE, TOTAL_EPISODES);
         const batchEpisodes = allScripts.filter(
             ep => ep.ep_id >= startEp && ep.ep_id <= endEp
         ).sort((a, b) => a.ep_id - b.ep_id);
@@ -154,8 +169,10 @@ export default function Stage5Page() {
     const handleGenerate = async () => {
         if (!activeProject) return;
 
-        const startEp = customStartEp || (selectedBatchIndex * BATCH_SIZE + 1);
-        const endEp = customEndEp || Math.min((selectedBatchIndex + 1) * BATCH_SIZE, 80);
+        // The range inputs stay synced with the selected batch (see effect above),
+        // so generate exactly what the user sees configured.
+        const startEp = customStartEp;
+        const endEp = customEndEp;
 
         if (endEp < startEp) {
             toast.error("结束集数不能小于起始集数");
@@ -163,14 +180,14 @@ export default function Stage5Page() {
         }
 
         setIsGenerating(true);
-        toast.info(`正在精修第 ${startEp}-${endEp} 集...`);
+        toast.info(`正在精修第 ${startEp}-${endEp} 集...（预计需要几分钟）`);
 
         try {
             const res = await api.post("/api/stage5/generate", {
                 project: activeProject.name,
                 start_ep: startEp,
                 end_ep: endEp
-            });
+            }, { timeoutMs: GENERATION_TIMEOUT_MS });
 
             if (res.success && res.episodes) {
                 setEditingEpisodes(res.episodes);
@@ -253,7 +270,7 @@ export default function Stage5Page() {
     // --- Helpers ---
     const getBatchStatus = (batchIndex: number): 'complete' | 'partial' | 'empty' => {
         const startEp = batchIndex * BATCH_SIZE + 1;
-        const endEp = Math.min((batchIndex + 1) * BATCH_SIZE, 80);
+        const endEp = Math.min((batchIndex + 1) * BATCH_SIZE, TOTAL_EPISODES);
         const expectedCount = endEp - startEp + 1;
         const count = s5Scripts.filter(ep => ep.ep_id >= startEp && ep.ep_id <= endEp).length;
         if (count >= expectedCount) return 'complete';
@@ -263,22 +280,24 @@ export default function Stage5Page() {
 
     const hasS4Input = (batchIndex: number): boolean => {
         const startEp = batchIndex * BATCH_SIZE + 1;
-        const endEp = Math.min((batchIndex + 1) * BATCH_SIZE, 80);
+        const endEp = Math.min((batchIndex + 1) * BATCH_SIZE, TOTAL_EPISODES);
         return s4Scripts.some(ep => ep.ep_id >= startEp && ep.ep_id <= endEp);
     };
 
     const getContextWindow = (): Episode[] => {
         const startEp = selectedBatchIndex * BATCH_SIZE + 1;
-        const endEp = Math.min((selectedBatchIndex + 1) * BATCH_SIZE, 80);
+        const endEp = Math.min((selectedBatchIndex + 1) * BATCH_SIZE, TOTAL_EPISODES);
         return s4Scripts.filter(ep => ep.ep_id >= startEp && ep.ep_id <= endEp);
     };
 
     const getProgress = () => {
         return {
             completed: s5Scripts.length,
-            total: 80
+            total: TOTAL_EPISODES
         };
     };
+
+    useUnloadGuard(isGenerating);
 
     // Get saved S5 scene content for comparison (left side shows saved state)
     const getSavedSceneContent = (epId: number, sceneId: string): string => {
@@ -324,12 +343,21 @@ export default function Stage5Page() {
                 <p className="text-slate-400 max-w-sm text-center">
                     Stage 5 需要 Stage 4 的剧本草稿作为输入。
                 </p>
+                <div className="mt-6">
+                    <Link href={`/stage4?project=${encodeURIComponent(activeProject.name)}`}>
+                        <Button className="gap-2">
+                            去 Stage 4
+                            <ArrowRight size={15} />
+                        </Button>
+                    </Link>
+                </div>
             </div>
         );
     }
 
     return (
         <div className="h-full flex flex-col">
+            <StageNav current={5} />
             {/* Header */}
             <div className="px-4 py-3 border-b shrink-0">
                 <div className="flex items-center justify-between">
@@ -413,7 +441,7 @@ export default function Stage5Page() {
                                 const hasInput = hasS4Input(idx);
                                 const isSelected = idx === selectedBatchIndex;
                                 const startEp = idx * BATCH_SIZE + 1;
-                                const endEp = Math.min((idx + 1) * BATCH_SIZE, 80);
+                                const endEp = Math.min((idx + 1) * BATCH_SIZE, TOTAL_EPISODES);
                                 return (
                                     <button
                                         key={idx}
@@ -452,7 +480,7 @@ export default function Stage5Page() {
                             <div>
                                 <h2 className="text-lg font-semibold">
                                     Batch {selectedBatchIndex + 1}:
-                                    第 {selectedBatchIndex * BATCH_SIZE + 1} - {Math.min((selectedBatchIndex + 1) * BATCH_SIZE, 80)} 集
+                                    第 {selectedBatchIndex * BATCH_SIZE + 1} - {Math.min((selectedBatchIndex + 1) * BATCH_SIZE, TOTAL_EPISODES)} 集
                                 </h2>
                             </div>
                             <div className="flex gap-2">
@@ -462,7 +490,7 @@ export default function Stage5Page() {
                                         type="number"
                                         value={customStartEp}
                                         min={1}
-                                        max={80}
+                                        max={TOTAL_EPISODES}
                                         onChange={(e) => setCustomStartEp(parseInt(e.target.value) || 1)}
                                         className="w-16 h-8 text-xs"
                                     />
@@ -471,7 +499,7 @@ export default function Stage5Page() {
                                         type="number"
                                         value={customEndEp}
                                         min={1}
-                                        max={80}
+                                        max={TOTAL_EPISODES}
                                         onChange={(e) => setCustomEndEp(parseInt(e.target.value) || BATCH_SIZE)}
                                         className="w-16 h-8 text-xs"
                                     />

@@ -29,7 +29,7 @@ import {
 } from "@/components/ui/dialog";
 import { toast } from "sonner";
 import { api } from "@/lib/api";
-import { Settings, Plus, Loader2, RotateCcw, Pencil, Trash2, Database, HelpCircle } from "lucide-react";
+import { Settings, Plus, Loader2, RotateCcw, Pencil, Trash2, HelpCircle } from "lucide-react";
 import {
     Tooltip,
     TooltipContent,
@@ -43,8 +43,8 @@ interface ModelConfig {
     model_name: string;
     api_key_env: string;
     base_url?: string;
-    thinking_level?: string;
-    supports_cache: boolean;
+    enable_thinking?: boolean;
+    supports_json_schema?: boolean;
     description?: string;
     pricing?: { input: number; output: number };
 }
@@ -54,8 +54,7 @@ const emptyModel: Omit<ModelConfig, "id"> = {
     model_name: "",
     api_key_env: "DASHSCOPE_API_KEY",
     base_url: "https://dashscope.aliyuncs.com/compatible-mode/v1",
-    thinking_level: "minimal",
-    supports_cache: false,
+    enable_thinking: false,
     description: "",
     pricing: { input: 0, output: 0 }
 };
@@ -103,8 +102,7 @@ export default function ModelsPage() {
             model_name: model.model_name,
             api_key_env: model.api_key_env,
             base_url: model.base_url || "",
-            thinking_level: model.thinking_level || "",
-            supports_cache: model.supports_cache,
+            enable_thinking: model.enable_thinking ?? false,
             description: model.description || "",
             pricing: model.pricing || { input: 0, output: 0 }
         });
@@ -204,20 +202,19 @@ export default function ModelsPage() {
                             <TableHead>Provider</TableHead>
                             <TableHead>Model Name</TableHead>
                             <TableHead>API Key Env</TableHead>
-                            <TableHead>Cache</TableHead>
                             <TableHead className="text-right">操作</TableHead>
                         </TableRow>
                     </TableHeader>
                     <TableBody>
                         {loading ? (
                             <TableRow>
-                                <TableCell colSpan={6} className="text-center py-8">
+                                <TableCell colSpan={5} className="text-center py-8">
                                     <Loader2 className="w-6 h-6 animate-spin mx-auto text-slate-400" />
                                 </TableCell>
                             </TableRow>
                         ) : models.length === 0 ? (
                             <TableRow>
-                                <TableCell colSpan={6} className="text-center py-8 text-slate-400">
+                                <TableCell colSpan={5} className="text-center py-8 text-slate-400">
                                     暂无模型配置
                                 </TableCell>
                             </TableRow>
@@ -226,22 +223,12 @@ export default function ModelsPage() {
                                 <TableRow key={m.id}>
                                     <TableCell className="font-mono text-sm font-medium">{m.id}</TableCell>
                                     <TableCell>
-                                        <span className={`px-2 py-0.5 rounded text-xs ${m.provider === "google"
-                                            ? "bg-blue-100 text-blue-700"
-                                            : "bg-green-100 text-green-700"
-                                            }`}>
+                                        <span className="px-2 py-0.5 rounded text-xs bg-green-100 text-green-700">
                                             {m.provider}
                                         </span>
                                     </TableCell>
                                     <TableCell className="font-mono text-sm">{m.model_name}</TableCell>
                                     <TableCell className="font-mono text-xs text-slate-500">{m.api_key_env}</TableCell>
-                                    <TableCell>
-                                        {m.supports_cache ? (
-                                            <Database className="w-4 h-4 text-green-500" />
-                                        ) : (
-                                            <span className="text-slate-300">-</span>
-                                        )}
-                                    </TableCell>
                                     <TableCell className="text-right">
                                         <Button
                                             variant="ghost"
@@ -290,22 +277,12 @@ export default function ModelsPage() {
                             <Label>Provider *</Label>
                             <Select
                                 value={formData.provider}
-                                onValueChange={(v) => {
-                                    updateField("provider", v);
-                                    // 自动切换 api_key_env
-                                    if (v === "openai") {
-                                        updateField("api_key_env", "DASHSCOPE_API_KEY");
-                                        updateField("base_url", "https://dashscope.aliyuncs.com/compatible-mode/v1");
-                                    } else {
-                                        updateField("api_key_env", "DASHSCOPE_API_KEY");
-                                    }
-                                }}
+                                onValueChange={(v) => updateField("provider", v)}
                             >
                                 <SelectTrigger>
                                     <SelectValue />
                                 </SelectTrigger>
                                 <SelectContent>
-                                    <SelectItem value="google">Google</SelectItem>
                                     <SelectItem value="openai">OpenAI Compatible</SelectItem>
                                 </SelectContent>
                             </Select>
@@ -353,45 +330,22 @@ export default function ModelsPage() {
                             />
                         </div>
 
-                        {/* Base URL (OpenAI only) */}
-                        {formData.provider === "openai" && (
-                            <div className="grid gap-2">
-                                <Label>Base URL</Label>
-                                <Input
-                                    placeholder="例如: https://dashscope.aliyuncs.com/compatible-mode/v1"
-                                    value={formData.base_url}
-                                    onChange={(e) => updateField("base_url", e.target.value)}
-                                />
-                            </div>
-                        )}
+                        {/* Base URL */}
+                        <div className="grid gap-2">
+                            <Label>Base URL</Label>
+                            <Input
+                                placeholder="例如: https://dashscope.aliyuncs.com/compatible-mode/v1"
+                                value={formData.base_url}
+                                onChange={(e) => updateField("base_url", e.target.value)}
+                            />
+                        </div>
 
-                        {/* Thinking Level (Google only) */}
-                        {formData.provider === "google" && (
-                            <div className="grid gap-2">
-                                <Label>Thinking Level</Label>
-                                <Select
-                                    value={formData.thinking_level || "minimal"}
-                                    onValueChange={(v) => updateField("thinking_level", v)}
-                                >
-                                    <SelectTrigger>
-                                        <SelectValue />
-                                    </SelectTrigger>
-                                    <SelectContent>
-                                        <SelectItem value="minimal">Minimal</SelectItem>
-                                        <SelectItem value="low">Low</SelectItem>
-                                        <SelectItem value="medium">Medium</SelectItem>
-                                        <SelectItem value="high">High</SelectItem>
-                                    </SelectContent>
-                                </Select>
-                            </div>
-                        )}
-
-                        {/* Supports Cache */}
+                        {/* Enable Thinking */}
                         <div className="flex items-center justify-between">
-                            <Label>支持缓存</Label>
+                            <Label>启用思考模式 (enable_thinking)</Label>
                             <Switch
-                                checked={formData.supports_cache}
-                                onCheckedChange={(v) => updateField("supports_cache", v)}
+                                checked={formData.enable_thinking ?? false}
+                                onCheckedChange={(v) => updateField("enable_thinking", v)}
                             />
                         </div>
 

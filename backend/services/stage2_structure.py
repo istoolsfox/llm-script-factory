@@ -1,11 +1,7 @@
 """
 Stage 2 Service: Structure & Outline
-Refactored with clear cache logic separation.
 
-Three operations:
-1. build_cache() - Create cache, save to settings
-2. generate_without_cache() - Full system + context + user
-3. generate_with_cache() - User only, reuse cache
+Converts rough 8-card skeleton into detailed 80-episode outlines.
 """
 import os
 import json
@@ -94,76 +90,37 @@ class Stage2Service(BaseService):
         return self.prompts.load_dtg_theory(branch="dtg/Distill-1", file_list=self.DTG_FILES)
 
     # =========================================================================
-    # CACHE BUILD
+    # GENERATION
     # =========================================================================
-    def build_cache(
-        self, 
-        model_key: str, 
-        project_name: str, 
-        ttl_seconds: int = 600
-    ) -> str:
+    @staticmethod
+    def _parse_episode_range(episodes_str: str) -> tuple:
         """
-        Build cache for Stage 2.
-        
-        Cache contains:
-        - system_content: TMPL_CONTEXT_SYS (rendered)
-        - context_contents: TMPL_OUTLINES_DTG with DTG + Story Bible (rendered)
+        Parse an absolute episode range string like "11-15", "11~15", "11—15"
+        into (start_ep, end_ep). Raises ValueError with a clear message when
+        the format is not parseable.
         """
-        # 1. Load Story Bible and User Input
-        story_bible = self.load_story_bible(project_name)
-        story_bible_str = json.dumps(story_bible, indent=2, ensure_ascii=False)
-        user_input = self._load_user_input(project_name)
-        
-        # 2. Render prompts
-        dtg_raw = self._prepare_dtg_content()
-        sys_content = self.prompts.render(self.TMPL_CONTEXT_SYS, full_context="", story_bible="")
-        dtg_content = self.prompts.render(
-            self.TMPL_OUTLINES_DTG, 
-            full_context=dtg_raw,
-            story_bible=story_bible_str,
-            user_input=user_input
-        )
-        
-        # 3. Create cache via BaseService
-        cache_name = self.ensure_cache(
-            model_key=model_key,
-            display_name=f"stage2_cache_{project_name}",
-            system_content=sys_content,
-            context_contents=[dtg_content],
-            ttl_seconds=ttl_seconds
-        )
-        
-        # 4. Save cache_name to project settings
-        self._save_cache_to_settings(project_name, cache_name)
-        
-        return cache_name
+        import re
+        parts = re.split(r"\s*[-~—–～]\s*", str(episodes_str).strip())
+        try:
+            start_ep = int(parts[0])
+            end_ep = int(parts[1]) if len(parts) > 1 and parts[1] else start_ep
+        except (ValueError, IndexError):
+            raise ValueError(
+                f"无法解析分集范围 '{episodes_str}'（应为如 '11-15' 的格式），"
+                f"请在 Stage 1 Step 3 详细卡纲中修正 episodes 字段。"
+            )
+        return start_ep, end_ep
 
-    def _save_cache_to_settings(self, project_name: str, cache_name: str):
-        """Save cache_name to project settings."""
-        settings = self.projects.get_settings(project_name)
-        if "stage2" not in settings:
-            settings["stage2"] = {}
-        settings["stage2"]["cacheName"] = cache_name
-        self.projects.save_settings(project_name, settings)
-        print(f"✅ Stage2 cache saved to settings: {cache_name}")
-
-    # =========================================================================
-    # GENERATION (dispatcher)
-    # =========================================================================
     def generate_batch(
-        self, 
+        self,
         project_name: str,
         card_index: int,
         unit_index: int,
-        model_key: Optional[str] = None,
-        use_cache: bool = False,
-        cache_name: Optional[str] = None,
         temperature: float = 0.7
     ) -> List[Dict]:
         """
         Generate detailed outlines for a story unit.
-        Dispatches to cached or raw path based on settings.
-        
+
         Args:
             card_index: Card index (0-7)
             unit_index: Story unit index (0-1 typically)
@@ -191,15 +148,13 @@ class Stage2Service(BaseService):
         # Parse episodes range - episodes field contains absolute ep_ids (e.g., "11-15")
         # NOT relative to card (the data from Stage 1 Step 3 is already absolute)
         episodes_str = unit_data.get("episodes", "1-5")
-        ep_parts = episodes_str.replace(" ", "").split("-")
-        start_ep = int(ep_parts[0])
-        end_ep = int(ep_parts[1]) if len(ep_parts) > 1 else start_ep
-        
+        start_ep, end_ep = self._parse_episode_range(episodes_str)
+
         # 2. Prepare user prompt (always needed)
         # Get previous unit's generated episodes for context
         previous_unit = self._get_previous_unit_context(detailed_cards, card_index, unit_index)
         previous_episodes = self._get_previous_unit_episodes(project_name, detailed_cards, card_index, unit_index)
-        
+
         user_content = self.prompts.render(
             self.TMPL_INSTRUCTION_USER,
             current_card=card_data,
@@ -209,41 +164,15 @@ class Stage2Service(BaseService):
             previous_unit=previous_unit,
             previous_episodes=previous_episodes
         )
-        
-        # 3. Get model from settings if not provided
-        if not model_key:
-            settings = self.projects.get_settings(project_name)
-            stage_cfg = settings.get("stage2", {})
-            model_key, temperature = self.resolve_model_key(project_name, "stage2")
 
-            use_cache = stage_cfg.get("useCache", False)
-            cache_name = stage_cfg.get("cacheName") if use_cache else None
-        
-        # 4. Dispatch
-        if use_cache and cache_name:
-            result = self._generate_batch_cached(model_key, user_content, cache_name, temperature)
-        else:
-            result = self._generate_batch_raw(model_key, user_content, story_bible, project_name, temperature)
-        
+        # 3. Resolve model from project settings
+        model_key, temperature = self.resolve_model_key(project_name, "stage2")
+
+        # 4. Generate
+        result = self._generate_batch_raw(model_key, user_content, story_bible, project_name, temperature)
+
         return self._normalize_result(result)
-    
-    def _generate_batch_cached(
-        self, 
-        model_key: str, 
-        user_content: str, 
-        cache_name: str,
-        temperature: float
-    ) -> Any:
-        """Cached path: only user prompt, cache handles system + context."""
-        return self.process_request(
-            model_key=model_key,
-            user_content=user_content,
-            cache_name=cache_name,
-            temperature=temperature,
-            source="stage2/generate/cached",
-            response_schema=self.RESPONSE_SCHEMA
-        )
-    
+
     def _generate_batch_raw(
         self, 
         model_key: str, 
@@ -285,15 +214,11 @@ class Stage2Service(BaseService):
         unit_index: int,
         existing_outlines: List[Dict],
         adjustment_instruction: str,
-        model_key: Optional[str] = None,
-        use_cache: bool = False,
-        cache_name: Optional[str] = None,
         temperature: float = 0.7
     ) -> List[Dict]:
         """
         Refine existing outlines based on user adjustment instructions.
-        Uses same cache as normal generation.
-        
+
         Args:
             card_index: Card index (0-7)
             unit_index: Story unit index (0-1 typically)
@@ -320,14 +245,12 @@ class Stage2Service(BaseService):
         
         # Parse episodes range - episodes field contains absolute ep_ids
         episodes_str = unit_data.get("episodes", "1-5")
-        ep_parts = episodes_str.replace(" ", "").split("-")
-        start_ep = int(ep_parts[0])
-        end_ep = int(ep_parts[1]) if len(ep_parts) > 1 else start_ep
-        
+        start_ep, end_ep = self._parse_episode_range(episodes_str)
+
         # 2. Get previous unit's generated episodes for context
         previous_unit = self._get_previous_unit_context(detailed_cards, card_index, unit_index)
         previous_episodes = self._get_previous_unit_episodes(project_name, detailed_cards, card_index, unit_index)
-        
+
         # 3. Render user prompt with existing outlines and adjustment instruction
         user_content = self.prompts.render(
             self.TMPL_REFINE_USER,
@@ -340,22 +263,13 @@ class Stage2Service(BaseService):
             existing_outlines=existing_outlines,
             adjustment_instruction=adjustment_instruction
         )
-        
-        # 4. Get model from settings if not provided
-        if not model_key:
-            settings = self.projects.get_settings(project_name)
-            stage_cfg = settings.get("stage2", {})
-            model_key, temperature = self.resolve_model_key(project_name, "stage2")
 
-            use_cache = stage_cfg.get("useCache", False)
-            cache_name = stage_cfg.get("cacheName") if use_cache else None
-        
-        # 5. Dispatch (same paths as normal generation)
-        if use_cache and cache_name:
-            result = self._generate_batch_cached(model_key, user_content, cache_name, temperature)
-        else:
-            result = self._generate_batch_raw(model_key, user_content, story_bible, project_name, temperature)
-        
+        # 4. Resolve model from project settings
+        model_key, temperature = self.resolve_model_key(project_name, "stage2")
+
+        # 5. Generate (same path as normal generation)
+        result = self._generate_batch_raw(model_key, user_content, story_bible, project_name, temperature)
+
         return self._normalize_result(result)
 
     # =========================================================================
@@ -466,11 +380,7 @@ class Stage2Service(BaseService):
         # Calculate episode range for previous unit
         # episodes field contains absolute ep_ids
         prev_episodes_str = previous_unit["episodes"]
-        
-        # Parse episode range (e.g., "11-15")
-        ep_parts = prev_episodes_str.replace(" ", "").split("-")
-        start_ep = int(ep_parts[0])
-        end_ep = int(ep_parts[1]) if len(ep_parts) > 1 else start_ep
+        start_ep, end_ep = self._parse_episode_range(prev_episodes_str)
         
         # Load existing outlines and filter by episode range
         existing_outlines = self.load_outlines(project_name)

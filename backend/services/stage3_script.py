@@ -1,11 +1,7 @@
 """
 Stage 3 Service: Scene Writer (Episode Outlines)
-Refactored with clear cache logic separation.
 
-Three operations:
-1. build_cache() - Create cache, save to settings
-2. generate_without_cache() - Full system + context + user
-3. generate_with_cache() - User only, reuse cache
+Converts Stage 2 outlines into detailed episode outlines with scene breakdowns.
 """
 import os
 import json
@@ -71,88 +67,30 @@ class Stage3Service(BaseService):
         return self.prompts.load_dtg_theory(branch="dtg/Distill-1", file_list=self.DTG_FILES)
 
     # =========================================================================
-    # CACHE BUILD
-    # =========================================================================
-    def build_cache(
-        self, 
-        model_key: str, 
-        project_name: str, 
-        ttl_seconds: int = 600
-    ) -> str:
-        """
-        Build cache for Stage 3.
-        
-        Cache contains:
-        - system_content: TMPL_SYS (rendered)
-        - context_contents: TMPL_DTG with DTG + Story Bible (rendered)
-        """
-        # 1. Load Story Bible and User Input
-        story_bible = self._load_story_bible(project_name)
-        story_bible_str = json.dumps(story_bible, indent=2, ensure_ascii=False)
-        user_input = self._load_user_input(project_name)
-        
-        # 2. Render prompts
-        dtg_raw = self._prepare_dtg_content()
-        sys_content = self.prompts.render(self.TMPL_SYS, full_context="", story_bible="")
-        dtg_content = self.prompts.render(
-            self.TMPL_DTG, 
-            full_context=dtg_raw,
-            story_bible=story_bible_str,
-            user_input=user_input
-        )
-        
-        # 3. Create cache via BaseService
-        cache_name = self.ensure_cache(
-            model_key=model_key,
-            display_name=f"stage3_cache_{project_name}",
-            system_content=sys_content,
-            context_contents=[dtg_content],
-            ttl_seconds=ttl_seconds
-        )
-        
-        # 4. Save cache_name to project settings
-        self._save_cache_to_settings(project_name, cache_name)
-        
-        return cache_name
-
-    def _save_cache_to_settings(self, project_name: str, cache_name: str):
-        """Save cache_name to project settings."""
-        settings = self.projects.get_settings(project_name)
-        if "stage3" not in settings:
-            settings["stage3"] = {}
-        settings["stage3"]["cacheName"] = cache_name
-        self.projects.save_settings(project_name, settings)
-        print(f"✅ Stage3 cache saved to settings: {cache_name}")
-
-    # =========================================================================
-    # GENERATION (dispatcher)
+    # GENERATION
     # =========================================================================
     def generate_batch(
-        self, 
+        self,
         project_name: str,
-        start_ep: int, 
+        start_ep: int,
         end_ep: int,
-        model_key: Optional[str] = None,
-        use_cache: bool = False,
-        cache_name: Optional[str] = None,
         temperature: float = 0.7
     ) -> List[Dict]:
         """
         Generate detailed episode outlines for a batch.
-        Dispatches to cached or raw path based on settings.
         """
         # 1. Load required data
         story_bible = self._load_story_bible(project_name)
         s2_outlines = self._load_s2_outlines(project_name)
         previous_s3_outlines = self._load_s3_outlines(project_name)
-        
+
         # 2. Prepare user prompt (always needed)
         context_window = self._get_context_window(start_ep, s2_outlines)
         rearview_mirror = self._get_rearview_mirror(previous_s3_outlines, start_ep)
-        
+
         context_str = json.dumps(context_window, indent=2, ensure_ascii=False)
         rearview_str = json.dumps(rearview_mirror, indent=2, ensure_ascii=False)
-        
+
         user_content = self.prompts.render(
             self.TMPL_USER,
             context_window=context_str,
@@ -160,40 +98,13 @@ class Stage3Service(BaseService):
             start_ep=start_ep,
             end_ep=end_ep
         )
-        
-        # 3. Get model from settings if not provided
-        if not model_key:
-            settings = self.projects.get_settings(project_name)
-            stage_cfg = settings.get("stage3", {})
-            model_key, temperature = self.resolve_model_key(project_name, "stage3")
 
-            use_cache = stage_cfg.get("useCache", False)
-            cache_name = stage_cfg.get("cacheName") if use_cache else None
-        
-        # 4. Dispatch
-        if use_cache and cache_name:
-            return self._generate_batch_cached(model_key, user_content, cache_name, temperature)
-        else:
-            return self._generate_batch_raw(model_key, user_content, story_bible, project_name, temperature)
-    
-    def _generate_batch_cached(
-        self, 
-        model_key: str, 
-        user_content: str, 
-        cache_name: str,
-        temperature: float
-    ) -> List[Dict]:
-        """Cached path: only user prompt, cache handles system + context."""
-        result = self.process_request(
-            model_key=model_key,
-            user_content=user_content,
-            cache_name=cache_name,
-            temperature=temperature,
-            source="stage3/generate/cached",
-            response_schema=self.RESPONSE_SCHEMA
-        )
-        return self._normalize_result(result)
-    
+        # 3. Resolve model from project settings
+        model_key, temperature = self.resolve_model_key(project_name, "stage3")
+
+        # 4. Generate
+        return self._generate_batch_raw(model_key, user_content, story_bible, project_name, temperature)
+
     def _generate_batch_raw(
         self, 
         model_key: str, 

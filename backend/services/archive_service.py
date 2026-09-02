@@ -23,19 +23,21 @@ class ArchiveService:
     def archive_project(self, project_name: str) -> str:
         """
         Archive a project to backup/ directory.
-        
+
         Args:
             project_name: Name of the project to archive
-            
+
         Returns:
             Path to the archived project
-            
+
         Raises:
-            ValueError: If project doesn't exist
+            ValueError: If project doesn't exist or name is invalid
         """
-        # 1. Validate source project exists
+        # 1. Validate source project exists (also guards against traversal)
         source_path = os.path.join(self.projects_dir, project_name)
-        if not os.path.exists(source_path):
+        if ".." in project_name or "/" in project_name or "\\" in project_name or \
+                os.path.realpath(source_path) != os.path.realpath(self.projects_dir + os.sep + project_name) or \
+                not os.path.isdir(source_path):
             raise ValueError(f"项目 '{project_name}' 不存在")
         
         # 2. Ensure backup directory exists

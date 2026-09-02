@@ -1,14 +1,17 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import Link from "next/link";
 import { useProject } from "@/lib/contexts/project-context";
 import { api } from "@/lib/api";
+import { StageNav } from "@/components/stage-nav";
+import { useLatestRequest, useUnloadGuard } from "@/lib/hooks/use-request-guard";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
-import { Loader2, Save, Play, FileText, CheckCircle2, Circle, ChevronRight, ChevronDown, FileDown, Trash2 } from "lucide-react";
+import { Loader2, ArrowRight, Save, Play, FileText, CheckCircle2, Circle, ChevronRight, ChevronDown, FileDown, Trash2 } from "lucide-react";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import {
     AlertDialog,
@@ -42,10 +45,13 @@ interface S2Episode {
 }
 
 const BATCH_SIZE = 3;
-const TOTAL_BATCHES = 27;
+const TOTAL_EPISODES = 80;
+const TOTAL_BATCHES = Math.ceil(TOTAL_EPISODES / BATCH_SIZE);
+const GENERATION_TIMEOUT_MS = 15 * 60 * 1000;
 
 export default function Stage3Page() {
     const { activeProject, isLoading } = useProject();
+    const loadGuard = useLatestRequest();
 
     // Data State
     const [s2Outlines, setS2Outlines] = useState<S2Episode[]>([]);
@@ -78,22 +84,27 @@ export default function Stage3Page() {
         setS2Outlines([]);
         setS3Outlines([]);
         setEditingEpisodes([]);
+        setSelectedBatchIndex(0);
     };
 
     const loadData = async () => {
         if (!activeProject) return;
+        const seq = loadGuard.next();
         try {
             // Load S2 outlines (context)
             const s2Res = await api.get(`/api/stage3/s2-outlines?project=${encodeURIComponent(activeProject.name)}`);
+            if (loadGuard.isStale(seq)) return;
             setS2Outlines(s2Res.outlines || []);
 
             // Load S3 outlines
             const s3Res = await api.get(`/api/stage3/outlines?project=${encodeURIComponent(activeProject.name)}`);
+            if (loadGuard.isStale(seq)) return;
             setS3Outlines(s3Res.outlines || []);
 
             // Initialize editing episodes for current batch
             updateEditingEpisodes(selectedBatchIndex, s3Res.outlines || []);
         } catch (e: any) {
+            if (loadGuard.isStale(seq)) return;
             console.error("Failed to load stage3 data:", e);
             toast.error("加载数据失败: " + e.message);
         }
@@ -106,7 +117,7 @@ export default function Stage3Page() {
 
     const updateEditingEpisodes = (batchIndex: number, allOutlines: Episode[]) => {
         const startEp = batchIndex * BATCH_SIZE + 1;
-        const endEp = Math.min((batchIndex + 1) * BATCH_SIZE, 80);
+        const endEp = Math.min((batchIndex + 1) * BATCH_SIZE, TOTAL_EPISODES);
         const batchEpisodes = allOutlines.filter(
             ep => ep.ep_id >= startEp && ep.ep_id <= endEp
         ).sort((a, b) => a.ep_id - b.ep_id);
@@ -123,17 +134,17 @@ export default function Stage3Page() {
         if (!activeProject) return;
 
         const startEp = selectedBatchIndex * BATCH_SIZE + 1;
-        const endEp = Math.min((selectedBatchIndex + 1) * BATCH_SIZE, 80);
+        const endEp = Math.min((selectedBatchIndex + 1) * BATCH_SIZE, TOTAL_EPISODES);
 
         setIsGenerating(true);
-        toast.info(`正在生成第 ${startEp}-${endEp} 集集纲...`);
+        toast.info(`正在生成第 ${startEp}-${endEp} 集集纲...（预计需要几分钟）`);
 
         try {
             const res = await api.post("/api/stage3/generate", {
                 project: activeProject.name,
                 start_ep: startEp,
                 end_ep: endEp
-            });
+            }, { timeoutMs: GENERATION_TIMEOUT_MS });
 
             if (res.success && res.episodes) {
                 setEditingEpisodes(res.episodes);
@@ -230,7 +241,7 @@ export default function Stage3Page() {
     // --- Helpers ---
     const getBatchStatus = (batchIndex: number): 'complete' | 'partial' | 'empty' => {
         const startEp = batchIndex * BATCH_SIZE + 1;
-        const endEp = Math.min((batchIndex + 1) * BATCH_SIZE, 80);
+        const endEp = Math.min((batchIndex + 1) * BATCH_SIZE, TOTAL_EPISODES);
         const expectedCount = endEp - startEp + 1;
         const count = s3Outlines.filter(ep => ep.ep_id >= startEp && ep.ep_id <= endEp).length;
         if (count >= expectedCount) return 'complete';
@@ -257,12 +268,14 @@ export default function Stage3Page() {
     const getProgress = () => {
         return {
             completed: s3Outlines.length,
-            total: 80
+            total: TOTAL_EPISODES
         };
     };
 
     const selectedEpisode = editingEpisodes.find(ep => ep.ep_id === selectedEpId);
     const progress = getProgress();
+
+    useUnloadGuard(isGenerating);
 
     // --- Render ---
     if (isLoading) {
@@ -297,12 +310,21 @@ export default function Stage3Page() {
                 <p className="text-slate-400 max-w-sm text-center">
                     Stage 3 需要 Stage 2 的分集大纲作为基础。
                 </p>
+                <div className="mt-6">
+                    <Link href={`/stage2?project=${encodeURIComponent(activeProject.name)}`}>
+                        <Button className="gap-2">
+                            去 Stage 2
+                            <ArrowRight size={15} />
+                        </Button>
+                    </Link>
+                </div>
             </div>
         );
     }
 
     return (
         <div className="h-full flex flex-col">
+            <StageNav current={3} />
             {/* Header */}
             <div className="px-4 py-3 border-b shrink-0">
                 <div className="flex items-center justify-between">
@@ -371,7 +393,7 @@ export default function Stage3Page() {
                                 const status = getBatchStatus(idx);
                                 const isSelected = idx === selectedBatchIndex;
                                 const startEp = idx * BATCH_SIZE + 1;
-                                const endEp = Math.min((idx + 1) * BATCH_SIZE, 80);
+                                const endEp = Math.min((idx + 1) * BATCH_SIZE, TOTAL_EPISODES);
                                 return (
                                     <button
                                         key={idx}
@@ -408,7 +430,7 @@ export default function Stage3Page() {
                             <div>
                                 <h2 className="text-lg font-semibold">
                                     Batch {selectedBatchIndex + 1}:
-                                    第 {selectedBatchIndex * BATCH_SIZE + 1} - {Math.min((selectedBatchIndex + 1) * BATCH_SIZE, 80)} 集
+                                    第 {selectedBatchIndex * BATCH_SIZE + 1} - {Math.min((selectedBatchIndex + 1) * BATCH_SIZE, TOTAL_EPISODES)} 集
                                 </h2>
                             </div>
                             <div className="flex gap-2">

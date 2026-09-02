@@ -1,16 +1,20 @@
 import os
-from jinja2 import Template, Environment, FileSystemLoader
+from jinja2 import Environment, FileSystemLoader
+
+# Backend root directory (parent of utils/). Templates are resolved against it
+# so template loading works regardless of the process working directory.
+_BACKEND_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
 class PromptManager:
     """
     Manages loading and rendering of prompt templates.
     Uses Jinja2 for dynamic content injection.
     """
-    
-    def __init__(self, template_dir="prompts"):
-        self.template_dir = template_dir
+
+    def __init__(self, template_dir=None):
+        self.template_dir = template_dir or os.path.join(_BACKEND_ROOT, "prompts")
         # Config Jinja environment
-        self.env = Environment(loader=FileSystemLoader(searchpath=template_dir))
+        self.env = Environment(loader=FileSystemLoader(searchpath=self.template_dir))
 
     def load_template_content(self, relative_path):
         """
@@ -27,11 +31,11 @@ class PromptManager:
     def render(self, template_name, **kwargs):
         """
         Render a specific template file with arguments.
-        
+
         Args:
             template_name (str): Path relative to 'prompts/', e.g., 'stage2/1_dtg_theory.j2'
             **kwargs: Variables to inject into the template.
-            
+
         Returns:
             str: Rendered string.
         """
@@ -47,12 +51,12 @@ class PromptManager:
         """
         Special helper to load Distributed Theory Generation (DTG) documents.
         This often involves concatenating multiple files.
-        
+
         Args:
-            branch (str): Subfolder in prompts/ (e.g. 'distill')
+            branch (str): Subfolder in prompts/ (e.g. 'dtg/Distill-1')
             file_list (List[str]): List of filenames to load.
         """
-        base_path = f"prompts/{branch}"
+        base_path = os.path.join(_BACKEND_ROOT, "prompts", branch)
         content = ""
         for f in file_list:
             p = os.path.join(base_path, f)

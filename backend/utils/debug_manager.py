@@ -7,22 +7,48 @@ from pathlib import Path
 # Mock session state if needed or specific memory storage
 _MEMORY_LOGS = []
 
+# Delete debug logs older than this many days.
+LOG_RETENTION_DAYS = 30
+_LAST_PRUNE_DAY = None
+
 class DebugManager:
     """
     Central Logging & Debugging Utility.
     Stores logs in memory (session) for UI widget and persists to disk (logs/) for Page 99.
     """
-    
+
     LOG_DIR = str(Path(__file__).resolve().parent.parent / "logs")
-    
+
+    @staticmethod
+    def _prune_old_logs():
+        """Delete daily log files beyond the retention window (runs once per day)."""
+        global _LAST_PRUNE_DAY
+        today = datetime.date.today()
+        if _LAST_PRUNE_DAY == today or not os.path.isdir(DebugManager.LOG_DIR):
+            return
+        cutoff = today - datetime.timedelta(days=LOG_RETENTION_DAYS)
+        try:
+            for f in os.listdir(DebugManager.LOG_DIR):
+                if not (f.startswith("debug_log_") and f.endswith(".jsonl")):
+                    continue
+                date_str = f.replace("debug_log_", "").replace(".jsonl", "")
+                try:
+                    if datetime.datetime.strptime(date_str, "%Y-%m-%d").date() < cutoff:
+                        os.remove(os.path.join(DebugManager.LOG_DIR, f))
+                except ValueError:
+                    continue
+            _LAST_PRUNE_DAY = today
+        except Exception as e:
+            print(f"Log pruning failed: {e}")
+
     @staticmethod
     def _get_log_filepath(date_str=None):
         if not os.path.exists(DebugManager.LOG_DIR):
             os.makedirs(DebugManager.LOG_DIR)
-            
+
         if not date_str:
             date_str = datetime.datetime.now().strftime("%Y-%m-%d")
-            
+
         return os.path.join(DebugManager.LOG_DIR, f"debug_log_{date_str}.jsonl")
 
     @staticmethod
@@ -64,6 +90,7 @@ class DebugManager:
             
         # 3. Disk Persistence (JSONL)
         try:
+            DebugManager._prune_old_logs()
             filepath = DebugManager._get_log_filepath()
             # Append mode
             with open(filepath, "a", encoding="utf-8") as f:

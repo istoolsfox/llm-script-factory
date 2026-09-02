@@ -1,13 +1,13 @@
 """
 Stage 5 API Router: Script Polisher
-Refactored with clear cache build endpoint.
+FastAPI routes for this stage.
 """
 from fastapi import APIRouter, HTTPException
 from typing import List, Dict, Any, Optional
 from services.stage5_polisher import Stage5Service
 from services.project_service import ProjectService
 from utils.file_manager import FileManager
-from api.schemas import GenerateBatchRequest, SaveScriptsRequest, BuildCacheRequest
+from api.schemas import GenerateBatchRequest, SaveScriptsRequest
 
 router = APIRouter(prefix="/api/stage5", tags=["Stage5"])
 
@@ -24,29 +24,11 @@ def get_project_path(project_name: str, relative_path: str) -> str:
 
 
 # =============================================================================
-# CACHE BUILD ENDPOINT
-# =============================================================================
-
-@router.post("/cache/build")
-async def build_cache(request: BuildCacheRequest) -> dict:
-    """Build cache for Stage 5."""
-    try:
-        cache_name = stage5_service.build_cache(
-            model_key=request.model_key,
-            project_name=request.project,
-            ttl_seconds=request.ttl_seconds
-        )
-        return {"success": True, "cache_name": cache_name}
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
-
-
-# =============================================================================
 # DATA LOADING
 # =============================================================================
 
 @router.get("/scripts")
-async def get_scripts(project: str) -> dict:
+def get_scripts(project: str) -> dict:
     """获取已精修的剧本列表"""
     path = get_project_path(project, "5_scripts/refined_scripts.json")
     scripts = FileManager.load_json(path, default=[])
@@ -54,7 +36,7 @@ async def get_scripts(project: str) -> dict:
 
 
 @router.get("/s4-scripts")
-async def get_s4_scripts(project: str) -> dict:
+def get_s4_scripts(project: str) -> dict:
     """获取 Stage 4 剧本草稿 (作为精修输入)"""
     path = get_project_path(project, "4_scripts/script_drafts.json")
     scripts = FileManager.load_json(path, default=[])
@@ -62,7 +44,7 @@ async def get_s4_scripts(project: str) -> dict:
 
 
 @router.get("/registry")
-async def get_registry(project: str) -> dict:
+def get_registry(project: str) -> dict:
     """获取角色出场注册表"""
     path = get_project_path(project, "5_scripts/character_registry.json")
     registry = FileManager.load_json(path, default={})
@@ -74,8 +56,8 @@ async def get_registry(project: str) -> dict:
 # =============================================================================
 
 @router.post("/generate")
-async def generate_batch(request: GenerateBatchRequest) -> dict:
-    """Generate batch of polished scripts (auto-detects cache from settings)."""
+def generate_batch(request: GenerateBatchRequest) -> dict:
+    """Generate batch of polished scripts ."""
     try:
         result = stage5_service.generate_batch(
             project_name=request.project,
@@ -94,7 +76,7 @@ async def generate_batch(request: GenerateBatchRequest) -> dict:
 # =============================================================================
 
 @router.post("/save")
-async def save_scripts(request: SaveScriptsRequest) -> dict:
+def save_scripts(request: SaveScriptsRequest) -> dict:
     """Save/update polished scripts (Upsert by ep_id)."""
     try:
         success = stage5_service.save_batch(
@@ -110,7 +92,7 @@ async def save_scripts(request: SaveScriptsRequest) -> dict:
 
 
 @router.delete("/{project_name}/scripts")
-async def clear_all_scripts(project_name: str):
+def clear_all_scripts(project_name: str):
     """Clear all refined scripts for a project."""
     try:
         success = stage5_service.clear_all_scripts(project_name)
@@ -126,7 +108,7 @@ async def clear_all_scripts(project_name: str):
 # =============================================================================
 
 @router.post("/copy-from-s4")
-async def copy_from_s4(project: str) -> dict:
+def copy_from_s4(project: str) -> dict:
     """Copy Stage 4 scripts to Stage 5 (reset/initialize)."""
     try:
         result = stage5_service.copy_from_s4(project)
@@ -138,7 +120,7 @@ async def copy_from_s4(project: str) -> dict:
 
 
 @router.get("/check-needs-init")
-async def check_needs_init(project: str) -> dict:
+def check_needs_init(project: str) -> dict:
     """Check if Stage 5 needs initialization from Stage 4."""
     try:
         return stage5_service.check_needs_init(project)

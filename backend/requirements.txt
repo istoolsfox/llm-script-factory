@@ -1,11 +1,11 @@
-fastapi
-uvicorn
-python-dotenv
-google-genai
-openai
-httpx
-jinja2
-pyyaml
-colorama
-python-multipart
-python-docx
+# Direct dependencies, pinned to the versions verified with this codebase.
+fastapi>=0.141.1,<0.142
+uvicorn>=0.52.4,<0.53
+python-dotenv>=1.2.3,<2
+openai>=3.6.0,<4
+httpx>=0.28.1,<0.29
+jinja2>=3.1.6,<4
+pyyaml>=6.0.3,<7
+colorama>=0.4.6,<0.5
+python-multipart>=0.0.32,<0.1
+python-docx>=1.2.0,<2

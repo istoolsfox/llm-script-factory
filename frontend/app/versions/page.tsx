@@ -35,7 +35,7 @@ export default function VersionPage() {
     const [loading, setLoading] = useState(false);
     const [snapshotting, setSnapshotting] = useState(false);
     const [expanded, setExpanded] = useState<string | null>(null);
-    const [viewData, setViewData] = useState<Record<string, any>>({});
+    const [viewData, setViewData] = useState<Record<string, Record<string, any>>>({});
     const [viewingComp, setViewingComp] = useState<string>("");
 
     const loadVersions = async () => {
@@ -78,7 +78,7 @@ export default function VersionPage() {
     const handleRestore = async (vid: string) => {
         if (!activeProject) return;
         try {
-            const res = await api.post(`/api/version/${encodeURIComponent(activeProject.name)}/restore?version_id=${vid}`, {});
+            const res = await api.post(`/api/version/${encodeURIComponent(activeProject.name)}/restore?version_id=${encodeURIComponent(vid)}`, {});
             toast.success("已恢复到该版本");
             await loadVersions();
         } catch (e: any) {
@@ -89,7 +89,7 @@ export default function VersionPage() {
     const handleDelete = async (vid: string) => {
         if (!activeProject) return;
         try {
-            await api.delete(`/api/version/${encodeURIComponent(activeProject.name)}/${vid}`);
+            await api.delete(`/api/version/${encodeURIComponent(activeProject.name)}/${encodeURIComponent(vid)}`);
             toast.success("版本已删除");
             await loadVersions();
         } catch (e: any) {
@@ -105,17 +105,23 @@ export default function VersionPage() {
         }
         setExpanded(vid);
         try {
-            // Load a few key components for preview
+            // Load a few key components for preview, cached per version+component
+            // so switching versions never shows another version's stale JSON.
             const comps = ["1_ideas/story_bible.json", "1_ideas/bible.json", "settings.json"];
             const data: Record<string, any> = {};
             for (const c of comps) {
+                const cacheKey = `${vid}:${c}`;
+                if (viewData[cacheKey] !== undefined) {
+                    data[cacheKey] = viewData[cacheKey];
+                    continue;
+                }
                 const res = await api.get(
                     `/api/version/${encodeURIComponent(activeProject.name)}/view?version_id=${encodeURIComponent(vid)}&component=${encodeURIComponent(c)}`
                 );
-                data[c] = res.data ?? {};
+                data[cacheKey] = res.data ?? {};
             }
-            setViewData(data);
-            setViewingComp(comps[0]);
+            setViewData(prev => ({ ...prev, ...data }));
+            setViewingComp(`${vid}:${comps[0]}`);
         } catch (e: any) {
             toast.error("加载版本内容失败: " + e.message);
         }
@@ -123,7 +129,7 @@ export default function VersionPage() {
 
     const fmtTime = (t: string) => {
         try {
-            return new Date(t).toLocaleString();
+            return new Date(t).toLocaleString("zh-CN", { hour12: false });
         } catch { return t; }
     };
 
@@ -241,9 +247,9 @@ export default function VersionPage() {
                                                     <TableCell colSpan={5} className="bg-slate-50 dark:bg-slate-900/50">
                                                         <div className="p-3 space-y-3">
                                                             <div className="flex flex-wrap gap-2">
-                                                                <Button size="sm" variant={viewingComp === "1_ideas/story_bible.json" ? "default" : "outline"} onClick={() => setViewingComp("1_ideas/story_bible.json")}>剧情梗概</Button>
-                                                                <Button size="sm" variant={viewingComp === "1_ideas/bible.json" ? "default" : "outline"} onClick={() => setViewingComp("1_ideas/bible.json")}>世界设定</Button>
-                                                                <Button size="sm" variant={viewingComp === "settings.json" ? "default" : "outline"} onClick={() => setViewingComp("settings.json")}>设置</Button>
+                                                                <Button size="sm" variant={viewingComp === `${v.id}:1_ideas/story_bible.json` ? "default" : "outline"} onClick={() => setViewingComp(`${v.id}:1_ideas/story_bible.json`)}>剧情梗概</Button>
+                                                                <Button size="sm" variant={viewingComp === `${v.id}:1_ideas/bible.json` ? "default" : "outline"} onClick={() => setViewingComp(`${v.id}:1_ideas/bible.json`)}>世界设定</Button>
+                                                                <Button size="sm" variant={viewingComp === `${v.id}:settings.json` ? "default" : "outline"} onClick={() => setViewingComp(`${v.id}:settings.json`)}>设置</Button>
                                                             </div>
                                                             <pre className="text-xs bg-slate-100 dark:bg-slate-800 p-3 rounded max-h-64 overflow-auto whitespace-pre-wrap">
                                                                 {JSON.stringify(viewData[viewingComp], null, 2)}

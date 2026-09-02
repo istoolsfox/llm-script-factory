@@ -1,7 +1,7 @@
 "use client"
 
 import React, { createContext, useContext, useState, useEffect } from "react"
-import { api } from "@/lib/api"
+import { api, getAuthToken } from "@/lib/api"
 import { toast } from "sonner"
 
 export interface Project {
@@ -15,7 +15,7 @@ interface ProjectContextType {
     projects: Project[]
     activeProject: Project | null
     isLoading: boolean
-    refreshProjects: () => Promise<void>
+    refreshProjects: () => Promise<Project[]>
     setActiveProject: (project: Project | null) => void
     createProject: (name: string, description?: string) => Promise<boolean>
 }
@@ -27,7 +27,9 @@ export function ProjectProvider({ children }: { children: React.ReactNode }) {
     const [activeProject, setActiveProject] = useState<Project | null>(null)
     const [isLoading, setIsLoading] = useState(false)
 
-    const refreshProjects = async () => {
+    const refreshProjects = async (): Promise<Project[]> => {
+        // 未登录（例如停留在登录页）时不请求数据，避免无意义的 401 报错
+        if (typeof window !== "undefined" && !getAuthToken()) return []
         setIsLoading(true)
         try {
             const res = await api.get("/api/common/projects")
@@ -41,13 +43,13 @@ export function ProjectProvider({ children }: { children: React.ReactNode }) {
                 } else {
                     setActiveProject(null)
                 }
-            } else if (res.projects.length > 0 && !activeProject) {
-                // Optional: Auto-select first? Maybe not.
             }
 
+            return res.projects as Project[]
         } catch (error) {
             console.error("Failed to fetch projects", error)
             toast.error("加载项目列表失败")
+            return []
         } finally {
             setIsLoading(false)
         }
@@ -57,10 +59,12 @@ export function ProjectProvider({ children }: { children: React.ReactNode }) {
         try {
             await api.post("/api/common/projects", { name, description })
             toast.success("项目创建成功")
-            await refreshProjects()
-            // Auto select new project
-            const newProject = projects.find(p => p.name === name) // Try to find logic better, fetch again
-            // Quick refresh was done.
+            // Refresh and auto-select the newly created project
+            const list = await refreshProjects()
+            const newProject = list.find(p => p.name === name)
+            if (newProject) {
+                setActiveProject(newProject)
+            }
             return true
         } catch (error: any) {
             toast.error(error.message || "创建项目失败")

@@ -1,13 +1,13 @@
 """
 Import API Router
 项目导入 - 解析原始剧本并创建项目
-Refactored with clear cache build endpoint.
+FastAPI routes for this stage.
 """
 from fastapi import APIRouter, HTTPException, UploadFile, File
 from typing import List, Dict, Any, Optional
 from services.import_service import ImportService
 from services.project_service import ProjectService
-from api.schemas import ImportParseRequest, ImportSaveRequest, ImportGenerateBibleRequest, BuildCacheRequest
+from api.schemas import ImportParseRequest, ImportSaveRequest, ImportGenerateBibleRequest
 
 router = APIRouter(prefix="/api/import", tags=["Import"])
 
@@ -17,29 +17,11 @@ project_service = ProjectService()
 
 
 # =============================================================================
-# CACHE BUILD ENDPOINT
-# =============================================================================
-
-@router.post("/cache/build")
-async def build_cache(request: BuildCacheRequest) -> dict:
-    """Build cache for Import Bible Generation."""
-    try:
-        cache_name = import_service.build_cache(
-            model_key=request.model_key,
-            project_name=request.project,
-            ttl_seconds=request.ttl_seconds
-        )
-        return {"success": True, "cache_name": cache_name}
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
-
-
-# =============================================================================
 # PARSING
 # =============================================================================
 
 @router.post("/parse")
-async def parse_content(request: ImportParseRequest) -> dict:
+def parse_content(request: ImportParseRequest) -> dict:
     """解析原始剧本文本"""
     try:
         result = import_service.parse_content(request.content)
@@ -57,16 +39,22 @@ async def parse_content(request: ImportParseRequest) -> dict:
 
 
 @router.post("/parse-file")
-async def parse_file(file: UploadFile = File(...)) -> dict:
+def parse_file(file: UploadFile = File(...)) -> dict:
     """解析上传的文件 (.docx, .txt, .md)"""
     try:
-        content = await file.read()
+        MAX_UPLOAD_BYTES = 20 * 1024 * 1024  # 20MB
+        content = file.file.read()
+        if len(content) > MAX_UPLOAD_BYTES:
+            raise HTTPException(status_code=413, detail="文件过大（最大 20MB）")
         filename = file.filename or ""
-        
+
         if filename.endswith(".docx"):
             result = import_service.parse_docx(content)
         else:
-            text = content.decode('utf-8')
+            try:
+                text = content.decode('utf-8')
+            except UnicodeDecodeError:
+                raise HTTPException(status_code=400, detail="文件不是有效的 UTF-8 文本，请另存为 UTF-8 编码后重试")
             result = import_service.parse_content(text)
         
         preview = import_service.get_episodes_preview(result.get("episodes", []))
@@ -88,7 +76,7 @@ async def parse_file(file: UploadFile = File(...)) -> dict:
 # =============================================================================
 
 @router.post("/save")
-async def save_episodes(request: ImportSaveRequest) -> dict:
+def save_episodes(request: ImportSaveRequest) -> dict:
     """保存解析结果到项目 (Stage 4/5/6)"""
     try:
         existing = project_service.list_projects()
@@ -120,8 +108,8 @@ async def save_episodes(request: ImportSaveRequest) -> dict:
 # =============================================================================
 
 @router.post("/generate-bible")
-async def generate_story_bible(request: ImportGenerateBibleRequest) -> dict:
-    """AI 生成 Story Bible (auto-detects cache from settings)."""
+def generate_story_bible(request: ImportGenerateBibleRequest) -> dict:
+    """AI 生成 Story Bible ."""
     try:
         result = import_service.generate_story_bible(
             project_name=request.project_name

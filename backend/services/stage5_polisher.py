@@ -1,11 +1,7 @@
 """
 Stage 5 Service: Script Polisher
-Refactored with clear cache logic separation.
 
-Three operations:
-1. build_cache() - Create cache, save to settings
-2. generate_without_cache() - Full system + context + user
-3. generate_with_cache() - User only, reuse cache
+Polishes Stage 4 drafts into refined production-ready scripts.
 """
 import os
 import json
@@ -36,126 +32,50 @@ class Stage5Service(BaseService):
         self.SCHEMA_REFINED_SCRIPT = "prompts/stage5/schema_refined_script.json"
 
     # =========================================================================
-    # CACHE BUILD
-    # =========================================================================
-    def build_cache(
-        self, 
-        model_key: str, 
-        project_name: str, 
-        ttl_seconds: int = 600
-    ) -> str:
-        """
-        Build cache for Stage 5.
-        
-        Cache contains:
-        - system_content: TMPL_SYS (rendered)
-        - context_contents: TMPL_EXAMPLES with Story Bible (rendered)
-        """
-        # 1. Load Story Bible and User Input
-        story_bible = self._load_story_bible(project_name)
-        story_bible_str = self._get_bible_text(story_bible)
-        user_input = self._load_user_input(project_name)
-        
-        # 2. Render prompts
-        sys_content = self.prompts.render(self.TMPL_SYS)
-        examples_content = self.prompts.render(self.TMPL_EXAMPLES, story_bible=story_bible_str, user_input=user_input)
-        
-        # 3. Create cache via BaseService
-        cache_name = self.ensure_cache(
-            model_key=model_key,
-            display_name=f"stage5_cache_{project_name}",
-            system_content=sys_content,
-            context_contents=[examples_content],
-            ttl_seconds=ttl_seconds
-        )
-        
-        # 4. Save cache_name to project settings
-        self._save_cache_to_settings(project_name, cache_name)
-        
-        return cache_name
-
-    def _save_cache_to_settings(self, project_name: str, cache_name: str):
-        """Save cache_name to project settings."""
-        settings = self.projects.get_settings(project_name)
-        if "stage5" not in settings:
-            settings["stage5"] = {}
-        settings["stage5"]["cacheName"] = cache_name
-        self.projects.save_settings(project_name, settings)
-        print(f"✅ Stage5 cache saved to settings: {cache_name}")
-
-    # =========================================================================
-    # GENERATION (dispatcher)
+    # GENERATION
     # =========================================================================
     def generate_batch(
-        self, 
+        self,
         project_name: str,
-        start_ep: int, 
+        start_ep: int,
         end_ep: int,
-        model_key: Optional[str] = None,
-        use_cache: bool = False,
-        cache_name: Optional[str] = None,
         temperature: float = 0.3
     ) -> List[Dict]:
         """
         Generate polished scripts for a batch.
-        Dispatches to cached or raw path based on settings.
         """
         # 1. Load required data
         story_bible = self._load_story_bible(project_name)
         story_bible_str = self._get_bible_text(story_bible)
         s4_scripts = self._load_s4_scripts(project_name)
-        
+
         # Filter to requested range
         batch_scripts = [ep for ep in s4_scripts if start_ep <= ep.get('ep_id', 0) <= end_ep]
         if not batch_scripts:
             raise ValueError(f"No Stage 4 scripts found for episodes {start_ep}-{end_ep}")
-        
+
         # 2. Prepare user prompt (always needed)
         registry = self._load_registry(project_name)
         status_list = self._format_character_status(registry, story_bible_str)
         raw_text_block = self._format_raw_scripts(batch_scripts)
-        
+
         user_content = self.prompts.render(
             self.TMPL_USER,
             raw_script=raw_text_block,
             character_status_list=status_list
         )
-        
-        # 3. Get model from settings if not provided
-        if not model_key:
-            settings = self.projects.get_settings(project_name)
-            stage_cfg = settings.get("stage5", {})
-            model_key, temperature = self.resolve_model_key(project_name, "stage5")
-            use_cache = stage_cfg.get("useCache", False)
-            cache_name = stage_cfg.get("cacheName") if use_cache else None
-        
-        # 4. Dispatch
-        if use_cache and cache_name:
-            result = self._generate_batch_cached(model_key, user_content, cache_name, temperature)
-        else:
-            result = self._generate_batch_raw(model_key, user_content, story_bible_str, project_name, temperature)
-        
+
+        # 3. Resolve model from project settings
+        model_key, temperature = self.resolve_model_key(project_name, "stage5")
+
+        # 4. Generate
+        result = self._generate_batch_raw(model_key, user_content, story_bible_str, project_name, temperature)
+
         # 5. Post-process (update registry)
         self._update_registry_from_response(project_name, result)
-        
+
         return self._normalize_result(result, batch_scripts)
-    
-    def _generate_batch_cached(
-        self, 
-        model_key: str, 
-        user_content: str, 
-        cache_name: str,
-        temperature: float
-    ) -> Any:
-        """Cached path: only user prompt, cache handles system + context."""
-        return self.process_request(
-            model_key=model_key,
-            user_content=user_content,
-            cache_name=cache_name,
-            temperature=temperature,
-            source="stage5/generate/cached"
-        )
-    
+
     def _generate_batch_raw(
         self, 
         model_key: str, 

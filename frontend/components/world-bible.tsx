@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { api } from "@/lib/api";
+import { useLatestRequest } from "@/lib/hooks/use-request-guard";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -28,16 +29,20 @@ interface WorldBibleProps {
 
 export function WorldBible({ synopsis, concept }: WorldBibleProps) {
     const { activeProject } = useProject();
+    const loadGuard = useLatestRequest();
     const [data, setData] = useState<any>({});
     const [loading, setLoading] = useState(false);
     const [generating, setGenerating] = useState<Record<string, boolean>>({});
 
     const loadData = async () => {
         if (!activeProject) return;
+        const seq = loadGuard.next();
         try {
             const res = await api.get(`/api/bible/${activeProject.name}/data`);
+            if (loadGuard.isStale(seq)) return;
             setData(res || {});
         } catch (e: any) {
+            if (loadGuard.isStale(seq)) return;
             toast.error("加载世界设定失败: " + e.message);
         }
     };
@@ -64,7 +69,7 @@ export function WorldBible({ synopsis, concept }: WorldBibleProps) {
         };
         try {
             toast.info(`正在生成${COMPONENT_META.find(c => c.key === comp)?.label}...`);
-            const res: any = await api.post(endpointMap[comp], { project_name: activeProject.name });
+            const res: any = await api.post(endpointMap[comp], { project_name: activeProject.name }, { timeoutMs: 10 * 60 * 1000 });
             if (res.success && res.data) {
                 setData((prev: any) => ({ ...prev, [comp]: res.data }));
                 toast.success(`${COMPONENT_META.find(c => c.key === comp)?.label}生成成功`);

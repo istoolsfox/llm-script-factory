@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { api } from "@/lib/api";
+import { api, getAuthHeaders } from "@/lib/api";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
@@ -96,7 +96,17 @@ export default function ImportPage() {
                 const res = await fetch(`${backendUrl}/api/import/parse-file`, {
                     method: 'POST',
                     body: formData,
+                    headers: getAuthHeaders(),
                 });
+
+                if (!res.ok) {
+                    let detail = `解析失败 (HTTP ${res.status})`;
+                    try {
+                        const errData = await res.json();
+                        if (errData?.detail) detail = errData.detail;
+                    } catch { /* not json */ }
+                    throw new Error(detail);
+                }
 
                 const data = await res.json();
                 if (data.success) {

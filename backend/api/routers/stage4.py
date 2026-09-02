@@ -1,13 +1,13 @@
 """
 Stage 4 API Router: Script Writer
-Refactored with clear cache build endpoint.
+FastAPI routes for this stage.
 """
 from fastapi import APIRouter, HTTPException
 from typing import List, Dict, Any, Optional
 from services.stage4_writer import Stage4Service
 from services.project_service import ProjectService
 from utils.file_manager import FileManager
-from api.schemas import GenerateBatchRequest, SaveScriptsRequest, BuildCacheRequest
+from api.schemas import GenerateBatchRequest, SaveScriptsRequest
 
 router = APIRouter(prefix="/api/stage4", tags=["Stage4"])
 
@@ -24,29 +24,11 @@ def get_project_path(project_name: str, relative_path: str) -> str:
 
 
 # =============================================================================
-# CACHE BUILD ENDPOINT
-# =============================================================================
-
-@router.post("/cache/build")
-async def build_cache(request: BuildCacheRequest) -> dict:
-    """Build cache for Stage 4."""
-    try:
-        cache_name = stage4_service.build_cache(
-            model_key=request.model_key,
-            project_name=request.project,
-            ttl_seconds=request.ttl_seconds
-        )
-        return {"success": True, "cache_name": cache_name}
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
-
-
-# =============================================================================
 # DATA LOADING
 # =============================================================================
 
 @router.get("/scripts")
-async def get_scripts(project: str) -> dict:
+def get_scripts(project: str) -> dict:
     """获取已生成的剧本列表"""
     path = get_project_path(project, "4_scripts/script_drafts.json")
     scripts = FileManager.load_json(path, default=[])
@@ -54,7 +36,7 @@ async def get_scripts(project: str) -> dict:
 
 
 @router.get("/s3-outlines")
-async def get_s3_outlines(project: str) -> dict:
+def get_s3_outlines(project: str) -> dict:
     """获取 Stage 3 集纲 (作为生成输入)"""
     path = get_project_path(project, "3_scripts/episode_outlines.json")
     outlines = FileManager.load_json(path, default=[])
@@ -66,8 +48,8 @@ async def get_s3_outlines(project: str) -> dict:
 # =============================================================================
 
 @router.post("/generate")
-async def generate_batch(request: GenerateBatchRequest) -> dict:
-    """Generate batch of scripts (auto-detects cache from settings)."""
+def generate_batch(request: GenerateBatchRequest) -> dict:
+    """Generate batch of scripts ."""
     try:
         result = stage4_service.generate_batch(
             project_name=request.project,
@@ -86,7 +68,7 @@ async def generate_batch(request: GenerateBatchRequest) -> dict:
 # =============================================================================
 
 @router.post("/save")
-async def save_scripts(request: SaveScriptsRequest) -> dict:
+def save_scripts(request: SaveScriptsRequest) -> dict:
     """Save/update scripts (Upsert by ep_id)."""
     try:
         success = stage4_service.save_batch(
@@ -102,7 +84,7 @@ async def save_scripts(request: SaveScriptsRequest) -> dict:
 
 
 @router.delete("/{project_name}/scripts")
-async def clear_all_scripts(project_name: str):
+def clear_all_scripts(project_name: str):
     """Clear all script drafts for a project."""
     try:
         success = stage4_service.clear_all_scripts(project_name)

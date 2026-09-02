@@ -1,8 +1,11 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import Link from "next/link";
 import { useProject } from "@/lib/contexts/project-context";
 import { api } from "@/lib/api";
+import { StageNav } from "@/components/stage-nav";
+import { useLatestRequest, useUnloadGuard } from "@/lib/hooks/use-request-guard";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
@@ -32,8 +35,11 @@ interface Instruction {
     prompt: string;
 }
 
+const GENERATION_TIMEOUT_MS = 5 * 60 * 1000; // single-episode refine/analyze
+
 export default function Stage6Page() {
     const { activeProject, isLoading } = useProject();
+    const loadGuard = useLatestRequest();
 
     // Data State
     const [scripts, setScripts] = useState<Episode[]>([]);
@@ -104,29 +110,39 @@ export default function Stage6Page() {
         setSelectedEpId(null);
     };
 
-    const loadData = async () => {
-        if (!activeProject) return;
+    const loadData = async (): Promise<Episode[]> => {
+        if (!activeProject) return [];
+        const seq = loadGuard.next();
         try {
             // Load scripts
             const scriptsRes = await api.get(`/api/stage6/scripts?project=${encodeURIComponent(activeProject.name)}`);
-            const loadedScripts = scriptsRes.scripts || [];
+            if (loadGuard.isStale(seq)) return [];
+            const loadedScripts: Episode[] = scriptsRes.scripts || [];
             setScripts(loadedScripts);
 
             // Load instructions
             const insRes = await api.get("/api/stage6/instructions");
+            if (loadGuard.isStale(seq)) return loadedScripts;
             const loadedIns = insRes.instructions || [];
             setInstructions(loadedIns);
             if (loadedIns.length > 0) {
                 setSelectedInstruction(loadedIns[0].prompt);
             }
 
-            // Auto-select first episode
-            if (loadedScripts.length > 0 && !selectedEpId) {
+            // Auto-select: when nothing is selected, or the current selection
+            // does not exist in THIS project's scripts (e.g. right after a
+            // project switch), fall back to the first episode so the editor
+            // never shows another project's content.
+            const currentValid = loadedScripts.some(ep => ep.ep_id === selectedEpId);
+            if (loadedScripts.length > 0 && !currentValid) {
                 selectEpisode(loadedScripts[0]);
             }
+            return loadedScripts;
         } catch (e: any) {
+            if (loadGuard.isStale(seq)) return [];
             console.error("Failed to load stage6 data:", e);
             toast.error("加载数据失败: " + e.message);
+            return [];
         }
     };
 
@@ -156,7 +172,7 @@ export default function Stage6Page() {
         if (!activeProject || !selectedEpId) return;
 
         setIsRefining(true);
-        toast.info("AI正在润色...");
+        toast.info("AI正在润色...（预计需要一两分钟）");
 
         try {
             const res = await api.post("/api/stage6/refine", {
@@ -165,7 +181,7 @@ export default function Stage6Page() {
                 instruction: selectedInstruction,
                 custom_instruction: customInstruction,
                 current_script: leftContent
-            });
+            }, { timeoutMs: GENERATION_TIMEOUT_MS });
 
             if (res.success && res.refined_text) {
                 setRightContent(res.refined_text);
@@ -191,12 +207,14 @@ export default function Stage6Page() {
 
             if (res.success) {
                 toast.success("左侧内容已保存！");
-                await loadData();
+                // loadData returns the refreshed list; using it avoids advancing
+                // based on a stale closure of `scripts`.
+                const refreshed = await loadData();
 
                 // Auto-advance to next episode if not at the last one
-                const currentIdx = scripts.findIndex(s => s.ep_id === selectedEpId);
-                if (currentIdx >= 0 && currentIdx < scripts.length - 1) {
-                    selectEpisode(scripts[currentIdx + 1]);
+                const currentIdx = refreshed.findIndex(s => s.ep_id === selectedEpId);
+                if (currentIdx >= 0 && currentIdx < refreshed.length - 1) {
+                    selectEpisode(refreshed[currentIdx + 1]);
                 }
             }
         } catch (e: any) {
@@ -224,12 +242,12 @@ export default function Stage6Page() {
             if (res.success) {
                 toast.success("已应用并保存AI润色结果！");
                 setRightContent("");
-                await loadData();
+                const refreshed = await loadData();
 
                 // Auto-advance to next episode if not at the last one
-                const currentIdx = scripts.findIndex(s => s.ep_id === selectedEpId);
-                if (currentIdx >= 0 && currentIdx < scripts.length - 1) {
-                    selectEpisode(scripts[currentIdx + 1]);
+                const currentIdx = refreshed.findIndex(s => s.ep_id === selectedEpId);
+                if (currentIdx >= 0 && currentIdx < refreshed.length - 1) {
+                    selectEpisode(refreshed[currentIdx + 1]);
                 }
             }
         } catch (e: any) {
@@ -273,6 +291,8 @@ export default function Stage6Page() {
     };
 
     // --- Helpers ---
+    useUnloadGuard(isRefining);
+
     const getEpisodeStatus = (epId: number): 'saved' | 'current' | 'empty' => {
         if (epId === selectedEpId) return 'current';
         const ep = scripts.find(s => s.ep_id === epId);
@@ -320,12 +340,21 @@ export default function Stage6Page() {
                 <p className="text-slate-400 max-w-sm text-center">
                     Stage 6 需要 Stage 5 的精修剧本作为输入。
                 </p>
+                <div className="mt-6">
+                    <Link href={`/stage5?project=${encodeURIComponent(activeProject.name)}`}>
+                        <Button className="gap-2">
+                            去 Stage 5
+                            <ArrowRight size={15} />
+                        </Button>
+                    </Link>
+                </div>
             </div>
         );
     }
 
     return (
         <div className="h-full flex flex-col">
+            <StageNav current={6} />
             {/* Header */}
             <div className="px-4 py-3 border-b shrink-0">
                 <div className="flex items-center justify-between">

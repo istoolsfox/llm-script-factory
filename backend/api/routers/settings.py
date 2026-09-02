@@ -31,8 +31,8 @@ class ModelConfigRequest(BaseModel):
     model_name: str
     api_key_env: str
     base_url: Optional[str] = None
-    thinking_level: Optional[str] = None
-    supports_cache: bool = False
+    enable_thinking: Optional[bool] = None
+    supports_json_schema: Optional[bool] = None
     description: Optional[str] = None
     pricing: Optional[dict] = None
 
@@ -42,14 +42,14 @@ class ModelConfigRequest(BaseModel):
 # ============================================================================
 
 @router.get("/keys")
-async def list_keys() -> dict:
+def list_keys() -> dict:
     """获取所有 Key 配置状态"""
     keys = ApiKeyService.list_keys()
     return {"keys": keys}
 
 
 @router.put("/keys/{key_name}")
-async def set_key(key_name: str, body: SetKeyRequest) -> dict:
+def set_key(key_name: str, body: SetKeyRequest) -> dict:
     """设置/更新 Key"""
     result = ApiKeyService.set_key(key_name, body.key_value)
     if not result.get("success"):
@@ -58,7 +58,7 @@ async def set_key(key_name: str, body: SetKeyRequest) -> dict:
 
 
 @router.delete("/keys/{key_name}")
-async def delete_key(key_name: str) -> dict:
+def delete_key(key_name: str) -> dict:
     """删除 Key"""
     result = ApiKeyService.delete_key(key_name)
     if not result.get("success"):
@@ -67,7 +67,7 @@ async def delete_key(key_name: str) -> dict:
 
 
 @router.post("/keys/reset")
-async def reset_keys() -> dict:
+def reset_keys() -> dict:
     """恢复默认 Key 配置"""
     result = ApiKeyService.reset_to_default()
     if not result.get("success"):
@@ -76,7 +76,7 @@ async def reset_keys() -> dict:
 
 
 @router.post("/keys/validate")
-async def validate_key(body: ValidateKeyRequest) -> dict:
+def validate_key(body: ValidateKeyRequest) -> dict:
     """验证 Key 有效性"""
     return ApiKeyService.validate_key(body.key_name, body.key_value)
 
@@ -86,14 +86,14 @@ async def validate_key(body: ValidateKeyRequest) -> dict:
 # ============================================================================
 
 @router.get("/models")
-async def list_models() -> dict:
+def list_models() -> dict:
     """获取所有模型配置"""
     models = ModelConfigService.list_models()
     return {"models": models}
 
 
 @router.get("/models/{model_id}")
-async def get_model(model_id: str) -> dict:
+def get_model(model_id: str) -> dict:
     """获取单个模型配置"""
     model = ModelConfigService.get_model(model_id)
     if not model:
@@ -102,7 +102,7 @@ async def get_model(model_id: str) -> dict:
 
 
 @router.post("/models/{model_id}")
-async def create_model(model_id: str, body: ModelConfigRequest) -> dict:
+def create_model(model_id: str, body: ModelConfigRequest) -> dict:
     """新增模型"""
     config = body.model_dump(exclude_none=True)
     result = ModelConfigService.create_model(model_id, config)
@@ -112,7 +112,7 @@ async def create_model(model_id: str, body: ModelConfigRequest) -> dict:
 
 
 @router.put("/models/{model_id}")
-async def update_model(model_id: str, body: ModelConfigRequest) -> dict:
+def update_model(model_id: str, body: ModelConfigRequest) -> dict:
     """更新模型"""
     config = body.model_dump(exclude_none=True)
     result = ModelConfigService.update_model(model_id, config)
@@ -122,7 +122,7 @@ async def update_model(model_id: str, body: ModelConfigRequest) -> dict:
 
 
 @router.delete("/models/{model_id}")
-async def delete_model(model_id: str) -> dict:
+def delete_model(model_id: str) -> dict:
     """删除模型"""
     result = ModelConfigService.delete_model(model_id)
     if not result.get("success"):
@@ -131,7 +131,7 @@ async def delete_model(model_id: str) -> dict:
 
 
 @router.post("/models/reset")
-async def reset_models() -> dict:
+def reset_models() -> dict:
     """恢复默认模型配置"""
     result = ModelConfigService.reset_to_default()
     if not result.get("success"):

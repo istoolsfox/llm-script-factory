@@ -4,21 +4,20 @@ models:
     model_name: qwen3.8-max
     base_url: https://dashscope.aliyuncs.com/compatible-mode/v1
     api_key_env: DASHSCOPE_API_KEY
-    supports_cache: false
     enable_thinking: false
-    description: "Qwen3.8-Max (最新旗舰, 强推理/规划)"
+    supports_json_schema: false
+    description: Qwen3.8-Max (最新旗舰, 强推理/规划)
     pricing:
       input: 12.0
       output: 36.0
-
   qwen3.8-flash:
     provider: openai
     model_name: qwen3.8-flash
     base_url: https://dashscope.aliyuncs.com/compatible-mode/v1
     api_key_env: DASHSCOPE_API_KEY
-    supports_cache: false
     enable_thinking: false
-    description: "Qwen3.8-Flash (最新快模型, 批量写剧/润色)"
+    supports_json_schema: false
+    description: Qwen3.8-Flash (最新快模型, 批量写剧/润色)
     pricing:
       input: 0.8
       output: 2.7

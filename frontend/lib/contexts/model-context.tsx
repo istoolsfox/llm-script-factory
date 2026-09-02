@@ -8,9 +8,6 @@ import { toast } from "sonner";
 interface ModelSettings {
     model: string;
     temperature: number;
-    useCache: boolean;
-    cacheName?: string | null;
-    cacheTTL: number; // 秒，最大 3600
 }
 
 interface ModelContextType {
@@ -21,24 +18,25 @@ interface ModelContextType {
 
 const defaultSettings: ModelSettings = {
     model: "", // 默认为空，强制用户选择
-    temperature: 0.7,
-    useCache: false,
-    cacheTTL: 600
+    temperature: 0.7
 };
 
 const ModelContext = createContext<ModelContextType | undefined>(undefined);
+
+/** Stage key under which settings are persisted in the project's settings.json. */
+function getStageName(pathname: string | null): string | null {
+    if (pathname === "/") return null;
+    const match = pathname?.match(/^\/(stage\d+)/);
+    if (match) return match[1];
+    if (pathname?.includes("/import")) return "import";
+    return null;
+}
 
 export function ModelProvider({ children }: { children: React.ReactNode }) {
     const searchParams = useSearchParams();
     const pathname = usePathname();
     const project = searchParams.get("project");
-
-    // Determine current stage from pathname (e.g. /stage1 -> stage1)
-    const getStageName = () => {
-        if (pathname === "/") return "dashboard";
-        const match = pathname.match(/^\/(stage\d+)/);
-        return match ? match[1] : "unknown";
-    };
+    const stage = getStageName(pathname);
 
     const [settings, setSettings] = useState<ModelSettings>(defaultSettings);
     const [isLoading, setIsLoading] = useState(false);
@@ -47,20 +45,22 @@ export function ModelProvider({ children }: { children: React.ReactNode }) {
     const isFirstLoad = useRef(true);
     const lastSavedSettings = useRef<string>("");
 
+    // Outside stage pages there is no stage-scoped settings key to work with.
+    const stageActive = Boolean(project && stage);
+
     // Load settings when project or stage changes
     useEffect(() => {
-        if (!project) return;
-
-        const stage = getStageName();
-        // Skip unknown stages or dashboard if no settings needed
-        // But maybe dashboard has general settings? Let's check.
+        if (!stageActive) {
+            isFirstLoad.current = true;
+            return;
+        }
 
         setIsLoading(true);
         isFirstLoad.current = true;
 
         api.get(`/api/common/projects/${project}/settings`)
             .then((res: any) => {
-                const stageSettings = res[stage] || {};
+                const stageSettings = res[stage!] || {};
                 const merged = { ...defaultSettings, ...stageSettings };
                 setSettings(merged);
                 lastSavedSettings.current = JSON.stringify(merged);
@@ -75,35 +75,30 @@ export function ModelProvider({ children }: { children: React.ReactNode }) {
                 setTimeout(() => { isFirstLoad.current = false; }, 100);
             });
 
-    }, [project, pathname]);
+    }, [project, stage, stageActive]);
 
-    // Autosave when settings change
-    // Using a simple effect with debounce logic implied by dependency change
-    // For production, maybe use a real debounce hook.
+    // Autosave when settings change (debounced)
     useEffect(() => {
-        if (!project || isFirstLoad.current) return;
+        if (!stageActive || isFirstLoad.current) return;
 
-        const stage = getStageName();
         const currentStr = JSON.stringify(settings);
 
         if (currentStr === lastSavedSettings.current) return;
 
         const timer = setTimeout(() => {
-            console.log("Saving settings...", settings);
             api.post(`/api/common/projects/${project}/settings`, {
-                settings: { [stage]: settings } // Partial update for this stage
+                settings: { [stage!]: settings } // Partial update for this stage
             })
                 .then(() => {
                     lastSavedSettings.current = JSON.stringify(settings);
-                    // toast.success("配置已同步"); // Too noisy?
                 })
-                .catch(err => {
+                .catch(() => {
                     toast.error("配置保存失败");
                 });
         }, 800); // 800ms debounce
 
         return () => clearTimeout(timer);
-    }, [settings, project, pathname]);
+    }, [settings, project, stage, stageActive]);
 
     const updateSettings = useCallback((partial: Partial<ModelSettings>) => {
         setSettings(prev => ({ ...prev, ...partial }));

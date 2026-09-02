@@ -3,6 +3,8 @@
 import { useEffect, useState } from "react";
 import { useProject } from "@/lib/contexts/project-context";
 import { api } from "@/lib/api";
+import { StageNav } from "@/components/stage-nav";
+import { useLatestRequest } from "@/lib/hooks/use-request-guard";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
@@ -57,8 +59,19 @@ interface Progress {
     completed_episodes: number;
 }
 
+/** Parse an absolute episode range like "11-15", "11~15", "11—15"; null when unparseable. */
+function parseEpisodeRange(episodesStr: string): { start: number; end: number } | null {
+    const parts = String(episodesStr || "").trim().split(/\s*[-~—–～]\s*/);
+    const start = parseInt(parts[0], 10);
+    if (Number.isNaN(start)) return null;
+    const end = parts[1] ? parseInt(parts[1], 10) : start;
+    if (Number.isNaN(end)) return null;
+    return { start, end };
+}
+
 export default function Stage2Page() {
     const { activeProject, isLoading } = useProject();
+    const loadGuard = useLatestRequest();
 
     // Data State
     const [storyBible, setStoryBible] = useState<any>(null);
@@ -104,8 +117,10 @@ export default function Stage2Page() {
 
     const loadData = async () => {
         if (!activeProject) return;
+        const seq = loadGuard.next();
         try {
             const res = await api.get(`/api/stage2/${encodeURIComponent(activeProject.name)}/data`);
+            if (loadGuard.isStale(seq)) return;
             setStoryBible(res.story_bible);
             setOutlines(res.outlines || []);
             setProgress(res.progress);
@@ -124,6 +139,7 @@ export default function Stage2Page() {
             // Initialize editing episodes for current unit
             updateEditingEpisodes(selectedCardIndex, selectedUnitIndex, res.outlines || [], detailed);
         } catch (e: any) {
+            if (loadGuard.isStale(seq)) return;
             console.error("Failed to load stage2 data:", e);
             toast.error("加载数据失败: " + e.message);
         }
@@ -132,7 +148,7 @@ export default function Stage2Page() {
     // Update editingEpisodes when card/unit selection changes
     useEffect(() => {
         updateEditingEpisodes(selectedCardIndex, selectedUnitIndex, outlines, detailedCards);
-    }, [selectedCardIndex, selectedUnitIndex, outlines]);
+    }, [selectedCardIndex, selectedUnitIndex, outlines, detailedCards]);
 
     const updateEditingEpisodes = (cardIndex: number, unitIndex: number, allOutlines: Episode[], detailed: DetailedCard[]) => {
         // Get episode range from detailed card's story unit
@@ -146,12 +162,15 @@ export default function Stage2Page() {
 
         // Parse episodes range - episodes field contains absolute ep_ids (e.g., "11-15")
         // NOT relative to card (the data from Stage 1 Step 3 is already absolute)
-        const epParts = unit.episodes.replace(/ /g, '').split('-');
-        const startEp = parseInt(epParts[0]);
-        const endEp = epParts[1] ? parseInt(epParts[1]) : parseInt(epParts[0]);
+        const range = parseEpisodeRange(unit.episodes);
+        if (!range) {
+            setEditingEpisodes([]);
+            setSelectedEpId(null);
+            return;
+        }
 
         const batchEpisodes = allOutlines.filter(
-            ep => ep.ep_id >= startEp && ep.ep_id <= endEp
+            ep => ep.ep_id >= range.start && ep.ep_id <= range.end
         ).sort((a, b) => a.ep_id - b.ep_id);
         setEditingEpisodes(batchEpisodes);
         // Select first episode of batch
@@ -174,9 +193,13 @@ export default function Stage2Page() {
         }
 
         // Parse episode range for display - episodes field contains absolute ep_ids
-        const epParts = unit.episodes.replace(/ /g, '').split('-');
-        const startEp = parseInt(epParts[0]);
-        const endEp = epParts[1] ? parseInt(epParts[1]) : parseInt(epParts[0]);
+        const range = parseEpisodeRange(unit.episodes);
+        if (!range) {
+            toast.error(`无法解析分集范围 "${unit.episodes}"，请在 Stage 1 Step 3 中修正`);
+            return;
+        }
+        const startEp = range.start;
+        const endEp = range.end;
 
         setIsGenerating(true);
 
@@ -191,15 +214,15 @@ export default function Stage2Page() {
                     unit_index: selectedUnitIndex,
                     existing_outlines: editingEpisodes,
                     adjustment_instruction: adjustmentInstruction
-                });
+                }, { timeoutMs: 15 * 60 * 1000 });
             } else {
                 // Normal mode: generate from scratch
-                toast.info(`正在生成第 ${startEp}-${endEp} 集...`);
+                toast.info(`正在生成第 ${startEp}-${endEp} 集...（预计需要几分钟）`);
                 res = await api.post("/api/stage2/batch/generate", {
                     project_name: activeProject.name,
                     card_index: selectedCardIndex,
                     unit_index: selectedUnitIndex
-                });
+                }, { timeoutMs: 15 * 60 * 1000 });
             }
 
             if (res.success && res.data?.episodes) {
@@ -266,18 +289,33 @@ export default function Stage2Page() {
 
     // --- Helpers ---
     const getCardStatus = (cardIndex: number): 'complete' | 'partial' | 'empty' => {
-        const startEp = cardIndex * 10 + 1;
-        const endEp = (cardIndex + 1) * 10;
-        const count = outlines.filter(ep => ep.ep_id >= startEp && ep.ep_id <= endEp).length;
-        if (count >= 10) return 'complete';
+        // Use the card's actual episode ranges from the detailed cards rather
+        // than assuming a fixed 10 episodes per card.
+        const card = detailedCards[cardIndex];
+        const units = card?.story_units || [];
+        if (units.length === 0) return 'empty';
+        let expected = 0;
+        let count = 0;
+        for (const unit of units) {
+            const range = parseEpisodeRange(unit.episodes);
+            if (!range) continue;
+            expected += range.end - range.start + 1;
+            count += outlines.filter(ep => ep.ep_id >= range.start && ep.ep_id <= range.end).length;
+        }
+        if (expected === 0) return 'empty';
+        if (count >= expected) return 'complete';
         if (count > 0) return 'partial';
         return 'empty';
     };
 
     const getRearviewMirror = (): Episode[] => {
-        const startEp = selectedCardIndex * 10 + 1;
+        // Anchor on the current unit's actual start episode when available
+        const card = detailedCards[selectedCardIndex];
+        const unit = card?.story_units?.[selectedUnitIndex];
+        const range = unit ? parseEpisodeRange(unit.episodes) : null;
+        const anchorEp = range ? range.start : 1;
         return outlines
-            .filter(ep => ep.ep_id < startEp)
+            .filter(ep => ep.ep_id < anchorEp)
             .sort((a, b) => b.ep_id - a.ep_id)
             .slice(0, 10)
             .reverse();
@@ -348,7 +386,7 @@ export default function Stage2Page() {
                 </div>
                 <h2 className="text-xl font-semibold mb-2">未选择项目</h2>
                 <p className="text-slate-400 max-w-sm text-center">
-                    请在左侧侧边栏选择一个项目以开始骨架构建。
+                    请在左侧侧边栏选择一个项目以开始结构构建。
                 </p>
             </div>
         );
@@ -370,11 +408,12 @@ export default function Stage2Page() {
 
     return (
         <div className="h-full flex flex-col">
+            <StageNav current={2} />
             {/* Header */}
             <div className="px-4 py-3 border-b shrink-0">
                 <div className="flex items-center justify-between">
                     <div>
-                        <h1 className="text-xl font-bold">Stage 2: 骨架构建 Structure Builder</h1>
+                        <h1 className="text-xl font-bold">Stage 2: 结构构建 Structure Builder</h1>
                         <p className="text-sm text-slate-500">将粗大纲转化为 80 集详细大纲</p>
                     </div>
                     {progress && (

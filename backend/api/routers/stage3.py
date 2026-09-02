@@ -1,13 +1,13 @@
 """
 Stage 3 API Router: Scene Writer
-Refactored with clear cache build endpoint.
+FastAPI routes for this stage.
 """
 from fastapi import APIRouter, HTTPException
 from typing import List, Dict, Any, Optional
 from services.stage3_script import Stage3Service
 from services.project_service import ProjectService
 from utils.file_manager import FileManager
-from api.schemas import GenerateBatchRequest, SaveOutlinesRequest, BuildCacheRequest
+from api.schemas import GenerateBatchRequest, SaveOutlinesRequest
 
 router = APIRouter(prefix="/api/stage3", tags=["Stage3"])
 
@@ -24,29 +24,11 @@ def get_project_path(project_name: str, relative_path: str) -> str:
 
 
 # =============================================================================
-# CACHE BUILD ENDPOINT
-# =============================================================================
-
-@router.post("/cache/build")
-async def build_cache(request: BuildCacheRequest) -> dict:
-    """Build cache for Stage 3."""
-    try:
-        cache_name = stage3_service.build_cache(
-            model_key=request.model_key,
-            project_name=request.project,
-            ttl_seconds=request.ttl_seconds
-        )
-        return {"success": True, "cache_name": cache_name}
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
-
-
-# =============================================================================
 # DATA LOADING
 # =============================================================================
 
 @router.get("/outlines")
-async def get_outlines(project: str) -> dict:
+def get_outlines(project: str) -> dict:
     """获取项目的集纲列表"""
     path = get_project_path(project, "3_scripts/episode_outlines.json")
     outlines = FileManager.load_json(path, default=[])
@@ -54,7 +36,7 @@ async def get_outlines(project: str) -> dict:
 
 
 @router.get("/s2-outlines")
-async def get_s2_outlines(project: str) -> dict:
+def get_s2_outlines(project: str) -> dict:
     """获取 Stage 2 大纲（作为上下文参考）"""
     path = get_project_path(project, "2_structure/detailed_outlines.json")
     outlines = FileManager.load_json(path, default=[])
@@ -66,8 +48,8 @@ async def get_s2_outlines(project: str) -> dict:
 # =============================================================================
 
 @router.post("/generate")
-async def generate_batch(request: GenerateBatchRequest) -> dict:
-    """Generate batch of episode outlines (auto-detects cache from settings)."""
+def generate_batch(request: GenerateBatchRequest) -> dict:
+    """Generate batch of episode outlines ."""
     try:
         result = stage3_service.generate_batch(
             project_name=request.project,
@@ -86,7 +68,7 @@ async def generate_batch(request: GenerateBatchRequest) -> dict:
 # =============================================================================
 
 @router.post("/save")
-async def save_outlines(request: SaveOutlinesRequest) -> dict:
+def save_outlines(request: SaveOutlinesRequest) -> dict:
     """Save/update episode outlines (Upsert by ep_id)."""
     try:
         success = stage3_service.save_batch(
@@ -102,7 +84,7 @@ async def save_outlines(request: SaveOutlinesRequest) -> dict:
 
 
 @router.delete("/{project_name}/scripts")
-async def clear_all_scripts(project_name: str):
+def clear_all_scripts(project_name: str):
     """Clear all episode outlines for a project."""
     try:
         success = stage3_service.clear_all_scripts(project_name)
@@ -118,7 +100,7 @@ async def clear_all_scripts(project_name: str):
 # =============================================================================
 
 @router.get("/export")
-async def export_docx(project: str) -> dict:
+def export_docx(project: str) -> dict:
     """Export episode outlines to DOCX file."""
     try:
         file_path = stage3_service.export_docx(project_name=project)

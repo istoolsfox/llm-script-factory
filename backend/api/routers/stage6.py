@@ -1,6 +1,6 @@
 """
 Stage 6 API Router: Script Doctor
-Refactored with clear cache build endpoint.
+FastAPI routes for this stage.
 """
 from fastapi import APIRouter, HTTPException
 from typing import List, Dict, Any, Optional
@@ -8,7 +8,7 @@ from services.stage6_doctor import Stage6Service
 from services.stage5_polisher import Stage5Service
 from services.project_service import ProjectService
 from utils.file_manager import FileManager
-from api.schemas import Stage6RefineRequest, Stage6SaveRequest, BuildCacheRequest
+from api.schemas import Stage6RefineRequest, Stage6SaveRequest
 import json
 import os
 
@@ -28,36 +28,18 @@ def get_project_path(project_name: str, relative_path: str) -> str:
 
 
 # =============================================================================
-# CACHE BUILD ENDPOINT
-# =============================================================================
-
-@router.post("/cache/build")
-async def build_cache(request: BuildCacheRequest) -> dict:
-    """Build cache for Stage 6."""
-    try:
-        cache_name = stage6_service.build_cache(
-            model_key=request.model_key,
-            project_name=request.project,
-            ttl_seconds=request.ttl_seconds
-        )
-        return {"success": True, "cache_name": cache_name}
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
-
-
-# =============================================================================
 # DATA LOADING
 # =============================================================================
 
 @router.get("/scripts")
-async def get_scripts(project: str) -> dict:
+def get_scripts(project: str) -> dict:
     """获取 Stage 6 剧本列表"""
     scripts = stage6_service.load_scripts(project)
     return {"scripts": scripts, "count": len(scripts)}
 
 
 @router.get("/s5-scripts")
-async def get_s5_scripts(project: str) -> dict:
+def get_s5_scripts(project: str) -> dict:
     """获取 Stage 5 剧本 (源)"""
     path = get_project_path(project, "5_scripts/refined_scripts.json")
     scripts = FileManager.load_json(path, default=[])
@@ -65,7 +47,7 @@ async def get_s5_scripts(project: str) -> dict:
 
 
 @router.get("/instructions")
-async def get_instructions() -> dict:
+def get_instructions() -> dict:
     """获取预设润色指令列表"""
     try:
         instructions_path = os.path.join(
@@ -88,8 +70,8 @@ async def get_instructions() -> dict:
 # =============================================================================
 
 @router.post("/analyze")
-async def analyze_episode(project: str, ep_id: int, current_script: str) -> dict:
-    """单集六维分析 (auto-detects cache from settings)."""
+def analyze_episode(project: str, ep_id: int, current_script: str) -> dict:
+    """单集六维分析 ."""
     try:
         result = stage6_service.analyze_episode(
             project_name=project,
@@ -103,8 +85,8 @@ async def analyze_episode(project: str, ep_id: int, current_script: str) -> dict
 
 
 @router.post("/refine")
-async def refine_episode(request: Stage6RefineRequest) -> dict:
-    """单集定向润色 (auto-detects cache from settings)."""
+def refine_episode(request: Stage6RefineRequest) -> dict:
+    """单集定向润色 ."""
     # Load prev/next episode summaries for context
     all_scripts = stage6_service.load_scripts(request.project)
     current_idx = next((i for i, ep in enumerate(all_scripts) if ep.get('ep_id') == request.ep_id), -1)
@@ -141,7 +123,7 @@ async def refine_episode(request: Stage6RefineRequest) -> dict:
 # =============================================================================
 
 @router.post("/save")
-async def save_script(request: Stage6SaveRequest) -> dict:
+def save_script(request: Stage6SaveRequest) -> dict:
     """保存单集剧本"""
     try:
         ep_data = stage6_service.parse_text_to_script(request.content, request.ep_id)
@@ -155,7 +137,7 @@ async def save_script(request: Stage6SaveRequest) -> dict:
 
 
 @router.delete("/{project_name}/scripts")
-async def clear_all_scripts(project_name: str):
+def clear_all_scripts(project_name: str):
     """Clear all final scripts for a project."""
     try:
         success = stage6_service.clear_all_scripts(project_name)
@@ -167,7 +149,7 @@ async def clear_all_scripts(project_name: str):
 
 
 @router.post("/copy-from-s5")
-async def copy_from_s5(project: str) -> dict:
+def copy_from_s5(project: str) -> dict:
     """Copy Stage 5 scripts to Stage 6 (reset/initialize)."""
     try:
         result = stage6_service.copy_from_s5(project)
@@ -179,7 +161,7 @@ async def copy_from_s5(project: str) -> dict:
 
 
 @router.get("/check-needs-init")
-async def check_needs_init(project: str) -> dict:
+def check_needs_init(project: str) -> dict:
     """Check if Stage 6 needs initialization from Stage 5."""
     try:
         return stage6_service.check_needs_init(project)
@@ -189,9 +171,10 @@ async def check_needs_init(project: str) -> dict:
 
 # Keep /reset as alias for backwards compatibility
 @router.post("/reset")
-async def reset_from_s5(project: str) -> dict:
+def reset_from_s5(project: str) -> dict:
     """从 Stage 5 重置所有剧本 (alias for copy-from-s5)"""
-    return await copy_from_s5(project)
+    result = stage6_service.copy_from_s5(project)
+    return {"success": True, "message": f"已从 Stage 5 拷贝 {result['count']} 集到 Stage 6"}
 
 
 # =============================================================================
@@ -199,7 +182,7 @@ async def reset_from_s5(project: str) -> dict:
 # =============================================================================
 
 @router.get("/export-docx")
-async def export_docx(project: str):
+def export_docx(project: str):
     """导出 Stage 6 剧本为 DOCX 文件（保存到项目目录）"""
     try:
         scripts = stage6_service.load_scripts(project)

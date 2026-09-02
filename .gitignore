@@ -49,3 +49,8 @@ yarn-error.log*
 # =========================
 downloads/
 download_runtimes.bat
+
+# =========================
+# Auth credentials (hashed)
+# =========================
+backend/config/auth.json

@@ -1,16 +1,15 @@
 """
 Stage 1 API Router: Idea Incubation
-Refactored with clear cache build endpoints.
+FastAPI routes for this stage.
 """
 import os
 from fastapi import APIRouter, HTTPException
 from fastapi.responses import PlainTextResponse
 from services.stage1_idea import Stage1Service
 from api.schemas import (
-    SynopsisGenerateRequest, 
-    OutlineGenerateRequest, 
+    SynopsisGenerateRequest,
+    OutlineGenerateRequest,
     Stage1SaveRequest,
-    Stage1CacheBuildRequest,
     DetailedGenerateRequest,
     ConceptPolishRequest
 )
@@ -41,34 +40,12 @@ def get_concept_template():
 
 
 # =============================================================================
-# CACHE BUILD ENDPOINTS
-# =============================================================================
-
-@router.post("/cache/build")
-def build_cache(payload: Stage1CacheBuildRequest):
-    """
-    Build unified cache for Stage 1 (shared by Synopsis and Rough steps).
-    Note: 'step' parameter is ignored, single cache is built for both steps.
-    """
-    try:
-        cache_name = service.build_cache(
-            model_key=payload.model_key,
-            project_name=payload.project_name,
-            ttl_seconds=payload.ttl_seconds
-        )
-        
-        return {"success": True, "cache_name": cache_name}
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
-
-
-# =============================================================================
 # GENERATION ENDPOINTS
 # =============================================================================
 
 @router.post("/synopsis/generate")
 def generate_synopsis(payload: SynopsisGenerateRequest):
-    """Generate synopsis (auto-detects cache from settings)."""
+    """Generate synopsis ."""
     try:
         result = service.generate_synopsis(
             project_name=payload.project_name,
@@ -83,7 +60,7 @@ def generate_synopsis(payload: SynopsisGenerateRequest):
 
 @router.post("/outline/generate")
 def generate_outline(payload: OutlineGenerateRequest):
-    """Generate rough outline (auto-detects cache from settings)."""
+    """Generate rough outline ."""
     try:
         result = service.generate_rough_outline(
             project_name=payload.project_name,
@@ -99,7 +76,7 @@ def generate_outline(payload: OutlineGenerateRequest):
 
 @router.post("/concept/polish")
 def polish_concept(payload: ConceptPolishRequest):
-    """Polish concept using AI (auto-detects cache from settings)."""
+    """Polish concept using AI ."""
     try:
         result = service.polish_concept(
             project_name=payload.project_name,

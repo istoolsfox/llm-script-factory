@@ -49,14 +49,6 @@ class Stage1SaveRequest(BaseModel):
     data: Dict[str, Any]
 
 
-class Stage1CacheBuildRequest(BaseModel):
-    """Stage 1: Build unified cache (used by both synopsis and rough)"""
-    project_name: str
-    step: Optional[str] = None  # Deprecated: now uses unified cache
-    model_key: str
-    ttl_seconds: int = 600
-
-
 class DetailedGenerateRequest(BaseModel):
     """Stage 1 Step 3: Generate detailed card outlines"""
     project_name: str
@@ -72,13 +64,6 @@ class GenerateBatchRequest(BaseModel):
     project: str
     start_ep: int
     end_ep: int
-
-
-class BuildCacheRequest(BaseModel):
-    """Request for building context cache"""
-    project: str
-    model_key: str
-    ttl_seconds: int = 600
 
 
 class SaveOutlinesRequest(BaseModel):
@@ -109,13 +94,6 @@ class Stage2RefineRequest(BaseModel):
     unit_index: int
     existing_outlines: List[Dict[str, Any]]  # 已生成的大纲
     adjustment_instruction: str               # 用户调整指令
-
-
-class Stage2CacheBuildRequest(BaseModel):
-    """Stage 2: Build cache"""
-    project_name: str
-    model_key: str
-    ttl_seconds: int = 600
 
 
 class Stage2BatchSaveRequest(BaseModel):
