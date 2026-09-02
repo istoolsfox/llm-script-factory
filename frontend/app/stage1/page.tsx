@@ -16,6 +16,7 @@ import { Loader2, Save, Play, RefreshCw, FileText, Pencil } from "lucide-react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
+import { WorldBible } from "@/components/world-bible";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
 
 export default function Stage1Page() {
@@ -508,6 +509,7 @@ export default function Stage1Page() {
                                     <TabsTrigger value="synopsis">剧情梗概</TabsTrigger>
                                     <TabsTrigger value="outline" disabled={!synopsisData}>粗大纲 (8 Beats)</TabsTrigger>
                                     <TabsTrigger value="detailed" disabled={!outlineData}>详细卡纲</TabsTrigger>
+                                    <TabsTrigger value="bible">世界设定</TabsTrigger>
                                 </TabsList>
                             </Tabs>
                         ) : (
@@ -748,6 +750,7 @@ export default function Stage1Page() {
                                 <TabsTrigger value="synopsis">剧情梗概</TabsTrigger>
                                 <TabsTrigger value="outline">粗大纲</TabsTrigger>
                                 <TabsTrigger value="detailed">详细卡纲</TabsTrigger>
+                                <TabsTrigger value="bible">世界设定</TabsTrigger>
                             </TabsList>
 
                             <TabsContent value="synopsis" className="flex-1 flex flex-col min-h-0 p-0 m-0 data-[state=inactive]:hidden">
@@ -976,6 +979,14 @@ export default function Stage1Page() {
                                                 <p>暂无详细卡纲。请点击上方按钮生成。</p>
                                             </div>
                                         )}
+                                    </div>
+                                </ScrollArea>
+                            </TabsContent>
+
+                            <TabsContent value="bible" className="flex-1 p-0 m-0 overflow-hidden">
+                                <ScrollArea className="h-full">
+                                    <div className="h-full">
+                                        <WorldBible synopsis={synopsisData} concept={concept} />
                                     </div>
                                 </ScrollArea>
                             </TabsContent>

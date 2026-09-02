@@ -1,0 +1,19 @@
+{
+  "type": "object",
+  "required": ["relationships"],
+  "properties": {
+    "relationships": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["from", "to", "type"],
+        "properties": {
+          "from": {"type": "string"},
+          "to": {"type": "string"},
+          "type": {"type": "string"},
+          "desc": {"type": "string"}
+        }
+      }
+    }
+  }
+}

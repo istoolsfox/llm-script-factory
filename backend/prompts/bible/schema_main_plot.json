@@ -1,0 +1,31 @@
+{
+  "type": "object",
+  "required": ["core_conflict"],
+  "properties": {
+    "core_conflict": {"type": "string"},
+    "main_thread": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "stage": {"type": "string"},
+          "desc": {"type": "string"}
+        }
+      }
+    },
+    "key_events": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "name": {"type": "string"},
+          "episode_hint": {"type": "string"},
+          "desc": {"type": "string"}
+        }
+      }
+    },
+    "character_motivation": {"type": "string"},
+    "ultimate_suspense": {"type": "string"},
+    "ending_direction": {"type": "string"}
+  }
+}

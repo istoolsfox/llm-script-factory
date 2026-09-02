@@ -1,0 +1,30 @@
+{
+  "type": "object",
+  "required": ["era"],
+  "properties": {
+    "era": {"type": "string"},
+    "locations": {
+      "type": "array",
+      "items": {"type": "string"}
+    },
+    "rules": {
+      "type": "array",
+      "items": {"type": "string"}
+    },
+    "unique_features": {
+      "type": "array",
+      "items": {"type": "string"}
+    },
+    "factions": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "name": {"type": "string"},
+          "desc": {"type": "string"}
+        }
+      }
+    },
+    "conflict_root": {"type": "string"}
+  }
+}

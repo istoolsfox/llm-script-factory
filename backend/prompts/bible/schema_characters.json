@@ -1,0 +1,28 @@
+{
+  "type": "object",
+  "required": ["characters"],
+  "properties": {
+    "characters": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["name", "role"],
+        "properties": {
+          "name": {"type": "string"},
+          "role": {"type": "string"},
+          "age": {"type": ["string", "number"]},
+          "appearance": {"type": "string"},
+          "personality": {
+            "type": "array",
+            "items": {"type": "string"}
+          },
+          "goals": {"type": "string"},
+          "fears": {"type": "string"},
+          "secrets": {"type": "string"},
+          "background": {"type": "string"},
+          "arc": {"type": "string"}
+        }
+      }
+    }
+  }
+}
