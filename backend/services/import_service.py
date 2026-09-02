@@ -175,10 +175,7 @@ class ImportService(BaseService):
         if not model_key:
             settings = self.projects.get_settings(project_name)
             import_cfg = settings.get("import", {})
-            model_key = import_cfg.get("model")
-            if not model_key:
-                raise ValueError("请先在侧边栏配置 Import 模型")
-            temperature = float(import_cfg.get("temperature", 0.7))
+            model_key, temperature = self.resolve_model_key(project_name, "import")
             use_cache = import_cfg.get("useCache", False)
             cache_name = import_cfg.get("cacheName") if use_cache else None
         

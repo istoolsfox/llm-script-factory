@@ -132,10 +132,7 @@ class Stage4Service(BaseService):
         if not model_key:
             settings = self.projects.get_settings(project_name)
             stage_cfg = settings.get("stage4", {})
-            model_key = stage_cfg.get("model")
-            if not model_key:
-                raise ValueError("请先在侧边栏配置 Stage 4 模型")
-            temperature = float(stage_cfg.get("temperature", 0.3))
+            model_key, temperature = self.resolve_model_key(project_name, "stage4")
             use_cache = stage_cfg.get("useCache", False)
             cache_name = stage_cfg.get("cacheName") if use_cache else None
         

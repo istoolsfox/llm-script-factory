@@ -1,6 +1,10 @@
 import os
 import json
+import time
 from typing import Optional, Dict, Any, Tuple
+
+# Last snapshot per project path to avoid excessive snapshots on rapid writes.
+_last_snapshot = {}
 
 class FileManager:
     """
@@ -23,12 +27,40 @@ class FileManager:
         return default
 
     @staticmethod
+    def _maybe_auto_snapshot(path: str):
+        """
+        If the path is inside a project dir, auto-snapshot that project before
+        overwriting (so every save creates a version). Rate-limited per project
+        (max 1 snapshot / 5s) to avoid bloat on rapid iterative saves.
+        """
+        try:
+            marker = "/projects/"
+            idx = path.find(marker)
+            if idx < 0:
+                return
+            # project_name is the path segment right after /projects/
+            rest = path[idx + len(marker):]
+            name = rest.split(os.sep)[0]
+            if not name:
+                return
+            now = time.time()
+            if _last_snapshot.get(name) and now - _last_snapshot[name] < 5:
+                return
+            from services.version_service import VersionService
+            meta = VersionService().snapshot(name, tag="auto_save")
+            if meta:
+                _last_snapshot[name] = now
+        except Exception as e:
+            print(f"[auto-snapshot] skipped: {e}")
+
+    @staticmethod
     def save_json(path: str, data: Any) -> bool:
         """
         Save JSON to absolute path.
-        Auto-creates directories.
+        Auto-creates directories and snapshots the project before overwrite.
         """
         try:
+            FileManager._maybe_auto_snapshot(path)
             os.makedirs(os.path.dirname(path), exist_ok=True)
             with open(path, "w", encoding='utf-8') as f:
                 json.dump(data, f, indent=2, ensure_ascii=False)

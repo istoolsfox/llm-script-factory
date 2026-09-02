@@ -15,6 +15,7 @@ from api.routers.debug import router as debug_router
 from api.routers.cache import router as cache_router
 from api.routers.settings import router as settings_router
 from api.routers.bible import router as bible_router
+from api.routers.version import router as version_router
 
 load_dotenv() 
 setup_chinese_logging()
@@ -48,6 +49,7 @@ app.include_router(debug_router)
 app.include_router(cache_router)
 app.include_router(settings_router)
 app.include_router(bible_router)
+app.include_router(version_router)
 
 @app.get("/")
 def read_root():

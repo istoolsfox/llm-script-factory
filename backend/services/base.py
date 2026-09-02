@@ -19,6 +19,22 @@ class BaseService:
         self.files = FileManager()
         self.projects = ProjectService()
 
+    # Default model fallback so generation works even without per-stage config.
+    DEFAULT_MODEL_KEY = "qwen3.8-flash"
+
+    def resolve_model_key(self, project_name: str, stage_id: str):
+        """
+        Resolve the model key for a stage from project settings.
+        Falls back to the default model (qwen3.8-flash) when unset, so users
+        never hit 'please configure model' errors.
+        Returns (model_key, temperature).
+        """
+        settings = self.projects.get_settings(project_name)
+        stage_cfg = settings.get(stage_id, {})
+        model_key = stage_cfg.get("model") or self.DEFAULT_MODEL_KEY
+        temperature = float(stage_cfg.get("temperature", 0.7))
+        return model_key, temperature
+
     # -------------------------------------------------------------------------
     # 3. CACHE MANAGEMENT (Common Service)
     # -------------------------------------------------------------------------

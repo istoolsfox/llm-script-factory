@@ -68,6 +68,16 @@ export function WorldBible({ synopsis, concept }: WorldBibleProps) {
             if (res.success && res.data) {
                 setData((prev: any) => ({ ...prev, [comp]: res.data }));
                 toast.success(`${COMPONENT_META.find(c => c.key === comp)?.label}生成成功`);
+                // 自动保存生成结果
+                try {
+                    await api.post("/api/bible/save", {
+                        project_name: activeProject.name,
+                        component: comp,
+                        data: res.data,
+                    });
+                } catch (saveErr: any) {
+                    console.error("Auto-save failed:", saveErr);
+                }
             } else {
                 toast.error("生成返回异常");
             }

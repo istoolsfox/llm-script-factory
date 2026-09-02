@@ -38,7 +38,7 @@ class BibleService(BaseService):
         super().__init__()
         # For generation we intentionally do NOT use cache (world-setting
         # content is small and project-specific; no context cache benefit).
-        self.model_key = "qwen3.8-max"
+        self.model_key = "qwen3.8-flash"
 
     # =========================================================================
     # PATH HELPERS

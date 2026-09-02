@@ -60,6 +60,10 @@ export default function Stage5Page() {
     // Current batch editing state
     const [editingEpisodes, setEditingEpisodes] = useState<Episode[]>([]);
 
+    // Custom episode range for generation (defaults to current batch)
+    const [customStartEp, setCustomStartEp] = useState<number>(1);
+    const [customEndEp, setCustomEndEp] = useState<number>(BATCH_SIZE);
+
     // --- Load Data ---
     useEffect(() => {
         if (activeProject) {
@@ -150,8 +154,13 @@ export default function Stage5Page() {
     const handleGenerate = async () => {
         if (!activeProject) return;
 
-        const startEp = selectedBatchIndex * BATCH_SIZE + 1;
-        const endEp = Math.min((selectedBatchIndex + 1) * BATCH_SIZE, 80);
+        const startEp = customStartEp || (selectedBatchIndex * BATCH_SIZE + 1);
+        const endEp = customEndEp || Math.min((selectedBatchIndex + 1) * BATCH_SIZE, 80);
+
+        if (endEp < startEp) {
+            toast.error("结束集数不能小于起始集数");
+            return;
+        }
 
         setIsGenerating(true);
         toast.info(`正在精修第 ${startEp}-${endEp} 集...`);
@@ -165,9 +174,19 @@ export default function Stage5Page() {
 
             if (res.success && res.episodes) {
                 setEditingEpisodes(res.episodes);
-                toast.success("精修成功！请检查并保存");
+                toast.success("精修并自动保存成功！");
                 if (res.episodes.length > 0) {
                     setSelectedEpId(res.episodes[0].ep_id);
+                }
+                // 自动保存
+                try {
+                    await api.post("/api/stage5/save", {
+                        project: activeProject.name,
+                        scripts: res.episodes
+                    });
+                    await loadData();
+                } catch (saveErr: any) {
+                    toast.error("自动保存失败: " + saveErr.message);
                 }
             }
         } catch (e: any) {
@@ -437,6 +456,26 @@ export default function Stage5Page() {
                                 </h2>
                             </div>
                             <div className="flex gap-2">
+                                <div className="flex items-center gap-1 text-xs text-slate-500">
+                                    <span>集数</span>
+                                    <Input
+                                        type="number"
+                                        value={customStartEp}
+                                        min={1}
+                                        max={80}
+                                        onChange={(e) => setCustomStartEp(parseInt(e.target.value) || 1)}
+                                        className="w-16 h-8 text-xs"
+                                    />
+                                    <span>-</span>
+                                    <Input
+                                        type="number"
+                                        value={customEndEp}
+                                        min={1}
+                                        max={80}
+                                        onChange={(e) => setCustomEndEp(parseInt(e.target.value) || BATCH_SIZE)}
+                                        className="w-16 h-8 text-xs"
+                                    />
+                                </div>
                                 <Button
                                     onClick={handleGenerate}
                                     disabled={isGenerating || !hasS4Input(selectedBatchIndex)}
