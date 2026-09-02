@@ -91,8 +91,8 @@ export default function ImportPage() {
                 const formData = new FormData();
                 formData.append('file', file);
 
-                // Use backend URL directly for file uploads
-                const backendUrl = process.env.NEXT_PUBLIC_API_URL || 'http://127.0.0.1:8000';
+                // Use same-origin URL (proxied by Next.js rewrites / nginx)
+                const backendUrl = process.env.NEXT_PUBLIC_API_URL || '';
                 const res = await fetch(`${backendUrl}/api/import/parse-file`, {
                     method: 'POST',
                     body: formData,

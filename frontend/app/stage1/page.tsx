@@ -45,7 +45,7 @@ export default function Stage1Page() {
     // Load default template from backend
     const loadDefaultTemplate = async () => {
         try {
-            const baseUrl = process.env.NEXT_PUBLIC_API_URL || 'http://127.0.0.1:8000';
+            const baseUrl = process.env.NEXT_PUBLIC_API_URL || '';
             const res = await fetch(`${baseUrl}/api/stage1/concept-template`);
             if (res.ok) {
                 const template = await res.text();
