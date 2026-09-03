@@ -482,7 +482,7 @@ export default function Stage4Page() {
                     <Collapsible open={isContextOpen} onOpenChange={setIsContextOpen}>
                         <CollapsibleTrigger className="w-full px-4 py-2 border-b bg-slate-50 dark:bg-slate-900/50 flex items-center gap-2 text-sm text-slate-600 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors">
                             {isContextOpen ? <ChevronDown size={16} /> : <ChevronRight size={16} />}
-                            📖 输入集纲 (S3)
+                            输入集纲 (S3)
                             <Badge variant="secondary" className="ml-2">{getContextWindow().length} 集</Badge>
                         </CollapsibleTrigger>
                         <CollapsibleContent>

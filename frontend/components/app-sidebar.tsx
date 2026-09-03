@@ -19,6 +19,12 @@ import {
     PenLine,
     LogOut,
     Wand2,
+    FileDown,
+    Users,
+    Share2,
+    Globe,
+    Clock,
+    Waypoints,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
@@ -168,9 +174,17 @@ export function AppSidebar() {
     const stagesDone = activeProject?.stages;
 
     const toolItems = [
-        { name: "洗稿换皮", icon: Wand2, href: "/rewrite" },
-        { name: "导入已有剧本", icon: Upload, href: "/import" },
-        { name: "版本历史", icon: History, href: "/versions" },
+        { name: "Rewrite Studio 洗稿", icon: Wand2, href: "/rewrite" },
+        { name: "Import 导入剧本", icon: Upload, href: "/import" },
+        { name: "Version History 版本", icon: History, href: "/versions" },
+        { name: "Export 导出", icon: FileDown, href: "/export" },
+    ];
+    const bibleItems = [
+        { name: "Characters 人物", icon: Users, href: "/bible/characters" },
+        { name: "Relationships 关系", icon: Share2, href: "/bible/relationships" },
+        { name: "World 世界", icon: Globe, href: "/bible/world" },
+        { name: "Timeline 时间线", icon: Clock, href: "/bible/timeline" },
+        { name: "Story Threads 故事线", icon: Waypoints, href: "/bible/threads" },
     ];
     const settingsItems = [
         { name: "API Keys", icon: KeyRound, href: "/settings/keys" },
@@ -310,13 +324,13 @@ export function AppSidebar() {
             <div className="flex-1 overflow-y-auto py-3">
                 {/* 概览 */}
                 <nav className={cn("grid gap-0.5 px-2", isCollapsed && "px-1")}>
-                    {renderNavLink({ name: "概览", icon: LayoutDashboard, href: "/" })}
+                    {renderNavLink({ name: "Overview 概览", icon: LayoutDashboard, href: "/" })}
                 </nav>
 
                 {/* 创作流程：六阶段 Stepper */}
                 <div className={cn("mt-4 px-2", isCollapsed && "px-1")}>
                     {!isCollapsed && (
-                        <div className="px-3 pb-1.5 text-xs font-medium text-slate-400">创作流程</div>
+                        <div className="px-3 pb-1.5 text-[11px] font-medium uppercase tracking-wider text-slate-400">Production</div>
                     )}
                     <nav className="grid gap-0.5" aria-label="创作流程">
                         {STAGES.map((stage, index) => {
@@ -352,7 +366,7 @@ export function AppSidebar() {
                                         className={cn(
                                             "flex h-5 w-5 shrink-0 items-center justify-center rounded-full border text-[11px] font-medium leading-none",
                                             isCurrent
-                                                ? "border-slate-900 bg-slate-900 text-white dark:border-slate-100 dark:bg-slate-100 dark:text-slate-900"
+                                                ? "border-primary bg-primary text-primary-foreground"
                                                 : done
                                                     ? "border-emerald-500 bg-emerald-500 text-white"
                                                     : "border-slate-300 text-slate-400 dark:border-slate-600 dark:text-slate-500"
@@ -381,10 +395,18 @@ export function AppSidebar() {
                     </nav>
                 </div>
 
-                {/* 工具 */}
+                {/* Story Bible */}
                 <div className={cn("mt-4 px-2", isCollapsed && "px-1")}>
                     {!isCollapsed && (
-                        <div className="px-3 pb-1.5 text-xs font-medium text-slate-400">工具</div>
+                        <div className="px-3 pb-1.5 text-[11px] font-medium uppercase tracking-wider text-slate-400">Story Bible</div>
+                    )}
+                    <nav className="grid gap-0.5">{bibleItems.map(renderNavLink)}</nav>
+                </div>
+
+                {/* Tools */}
+                <div className={cn("mt-4 px-2", isCollapsed && "px-1")}>
+                    {!isCollapsed && (
+                        <div className="px-3 pb-1.5 text-[11px] font-medium uppercase tracking-wider text-slate-400">Tools</div>
                     )}
                     <nav className="grid gap-0.5">{toolItems.map(renderNavLink)}</nav>
                 </div>
@@ -392,7 +414,7 @@ export function AppSidebar() {
                 {/* 设置 */}
                 <div className={cn("mt-4 px-2", isCollapsed && "px-1")}>
                     {!isCollapsed && (
-                        <div className="px-3 pb-1.5 text-xs font-medium text-slate-400">设置</div>
+                        <div className="px-3 pb-1.5 text-[11px] font-medium uppercase tracking-wider text-slate-400">Settings</div>
                     )}
                     <nav className="grid gap-0.5">
                         {settingsItems.map(renderNavLink)}

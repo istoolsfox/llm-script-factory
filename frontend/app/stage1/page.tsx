@@ -589,7 +589,7 @@ export default function Stage1Page() {
                                 {isAutoGenerating ? (
                                     <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> {autoStep || "一键生成中..."}（请勿关闭页面）</>
                                 ) : (
-                                    <><Sparkles className="mr-2 h-4 w-4" /> ⚡ 一键生成全部（梗概→大纲→详细卡纲）</>
+                                    <><Sparkles className="mr-2 h-4 w-4" /> 一键生成全部（梗概 → 大纲 → 详细卡纲）</>
                                 )}
                             </Button>
                         </div>
@@ -606,7 +606,7 @@ export default function Stage1Page() {
                             />
                             <details className="shrink-0 group">
                                 <summary className="text-xs text-slate-500 cursor-pointer select-none hover:text-slate-700 dark:hover:text-slate-300">
-                                    ✏️ 编辑核心创意
+                                    编辑核心创意
                                 </summary>
                                 <div className="mt-2 rounded-md border overflow-hidden" data-color-mode="light">
                                     <MDEditor
@@ -638,7 +638,7 @@ export default function Stage1Page() {
                                     {isGeneratingOut ? <><Loader2 className="mr-1 h-3 w-3 animate-spin" /> 生成中...</> : <><RefreshCw className="mr-1 h-3 w-3" /> 生成大纲</>}
                                 </Button>
                                 <Button onClick={() => handleAutoGenerate()} disabled={isAutoGenerating || isGeneratingSyn || isGeneratingOut || !concept.trim()} variant="secondary" size="sm">
-                                    {isAutoGenerating ? <><Loader2 className="mr-1 h-3 w-3 animate-spin" /> {autoStep || "生成中..."}</> : <><Sparkles className="mr-1 h-3 w-3" /> ⚡ 一键生成全部</>}
+                                    {isAutoGenerating ? <><Loader2 className="mr-1 h-3 w-3 animate-spin" /> {autoStep || "生成中..."}</> : <><Sparkles className="mr-1 h-3 w-3" /> 一键生成全部</>}
                                 </Button>
                             </div>
                         </div>
@@ -909,7 +909,7 @@ export default function Stage1Page() {
                                                 {synopsisData.background && (
                                                     <div className="bg-slate-50 dark:bg-slate-900/50 p-4 rounded-lg border">
                                                         <h3 className="font-semibold text-slate-900 dark:text-slate-200 mb-2 flex items-center gap-2">
-                                                            🌍 世界观与背景
+                                                            世界观与背景
                                                         </h3>
                                                         <p className="text-sm text-slate-700 dark:text-slate-300 leading-relaxed whitespace-pre-wrap">
                                                             {synopsisData.background}
@@ -920,7 +920,7 @@ export default function Stage1Page() {
                                                 {/* Value Analysis (Full) */}
                                                 {synopsisData.value_analysis && (
                                                     <div className="bg-amber-50 dark:bg-amber-900/20 p-4 rounded-lg border border-amber-100 dark:border-amber-900/50">
-                                                        <h3 className="font-semibold text-amber-800 dark:text-amber-200 mb-2">💡 核心价值与看点</h3>
+                                                        <h3 className="font-semibold text-amber-800 dark:text-amber-200 mb-2">核心价值与看点</h3>
                                                         <p className="text-sm text-amber-900/90 dark:text-amber-100/90 leading-relaxed">
                                                             {synopsisData.value_analysis}
                                                         </p>

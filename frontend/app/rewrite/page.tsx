@@ -277,7 +277,7 @@ export default function RewritePage() {
                                             <ArrowRight className="mr-2 h-4 w-4" /> 进入创作流程（概念自动填入 Stage 1）
                                         </Button>
                                         <Button className="w-full" onClick={() => goCreate(true)} disabled={isGenerating}>
-                                            <Sparkles className="mr-2 h-4 w-4" /> ⚡ 直接开整：自动填入并一键生成全剧
+                                            <Sparkles className="mr-2 h-4 w-4" /> 直接开整：自动填入并一键生成全剧
                                         </Button>
                                     </div>
                                 </div>

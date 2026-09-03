@@ -232,7 +232,7 @@ export default function DebugPage() {
                                         </h2>
                                         <p className="text-sm text-slate-500 mt-1">
                                             {selectedLog.timestamp} · {selectedLog.model}
-                                            {selectedLog.cache_hit && <Badge variant="secondary" className="ml-2">⚡ Cached</Badge>}
+                                            {selectedLog.cache_hit && <Badge variant="secondary" className="ml-2">Cached</Badge>}
                                         </p>
                                     </div>
                                     <div className="text-right text-sm">
