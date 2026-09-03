@@ -10,7 +10,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Loader2, Wand2, Copy, FileText, ArrowRight, RefreshCw } from "lucide-react";
+import { Loader2, Wand2, Copy, FileText, ArrowRight, RefreshCw, Sparkles } from "lucide-react";
 import { useRouter } from "next/navigation";
 
 type Analysis = {
@@ -101,6 +101,27 @@ export default function RewritePage() {
             toast.error("生成失败: " + e.message);
         } finally {
             setIsGenerating(false);
+        }
+    };
+
+    // 保存概念到项目并进入 Stage 1；auto=true 时到达后自动开始一键生成
+    const goCreate = async (auto: boolean) => {
+        if (!activeProject || !generated?.concept) return;
+        const conceptText = [
+            `# ${generated.title || ""}`,
+            generated.logline ? `**一句话故事**：${generated.logline}` : "",
+            "",
+            generated.concept
+        ].filter(Boolean).join("\n");
+        try {
+            await api.post("/api/stage1/user-input/save", {
+                project_name: activeProject.name,
+                concept: conceptText
+            });
+            toast.success(auto ? "概念已保存，即将自动生成全剧..." : "概念已保存，已填入 Stage 1");
+            router.push(auto ? "/stage1?autostart=1" : "/stage1");
+        } catch (e: any) {
+            toast.error("保存失败: " + e.message);
         }
     };
 
@@ -251,17 +272,14 @@ export default function RewritePage() {
                                             </div>
                                         </div>
                                     )}
-                                    <Button
-                                        variant="secondary"
-                                        className="w-full"
-                                        onClick={() => {
-                                            navigator.clipboard.writeText(generated.concept || "");
-                                            toast.success("概念已复制，去 Stage 1 粘贴到核心创意即可");
-                                            router.push("/stage1");
-                                        }}
-                                    >
-                                        <ArrowRight className="mr-2 h-4 w-4" /> 复制概念并前往 Stage 1 开工
-                                    </Button>
+                                    <div className="grid grid-cols-1 gap-2">
+                                        <Button variant="secondary" className="w-full" onClick={() => goCreate(false)}>
+                                            <ArrowRight className="mr-2 h-4 w-4" /> 进入创作流程（概念自动填入 Stage 1）
+                                        </Button>
+                                        <Button className="w-full" onClick={() => goCreate(true)} disabled={isGenerating}>
+                                            <Sparkles className="mr-2 h-4 w-4" /> ⚡ 直接开整：自动填入并一键生成全剧
+                                        </Button>
+                                    </div>
                                 </div>
                             )}
                         </CardContent>

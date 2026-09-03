@@ -154,6 +154,12 @@ export default function Stage1Page() {
                 setCardCount(res.config.card_count || 8);
                 setEpisodesPerCard(res.config.episodes_per_card || 10);
             }
+            // 从洗稿页带 autostart=1 进入：自动开始一键生成（仅触发一次）
+            if (typeof window !== "undefined" && new URLSearchParams(window.location.search).get("autostart") === "1") {
+                window.history.replaceState({}, "", "/stage1");
+                toast.info("洗稿概念已载入，自动开始生成全剧...");
+                setTimeout(() => handleAutoGenerate(true), 300);
+            }
         } catch (e) {
             if (loadGuard.isStale(seq)) return;
             console.error("Failed to load stage1 data");
@@ -222,14 +228,14 @@ export default function Stage1Page() {
     };
 
     // 一键生成：背景故事(世界设定) → 梗概 → 粗大纲 → 全部详细卡纲
-    const handleAutoGenerate = async () => {
+    const handleAutoGenerate = async (skipConfirm = false) => {
         if (!activeProject) return;
         if (!concept.trim()) {
             toast.error("请先填写核心创意（或在世界设定中填好背景故事）");
             return;
         }
         const total = cardCount * episodesPerCard;
-        if (!window.confirm(`将自动完成：梗概 → ${cardCount}卡粗大纲 → 全部详细卡纲（共约 ${total} 集）。\n耗时较长（可能5-15分钟），期间请勿关闭页面。确定开始？`)) return;
+        if (!skipConfirm && !window.confirm(`将自动完成：梗概 → ${cardCount}卡粗大纲 → 全部详细卡纲（共约 ${total} 集）。\n耗时较长（可能5-15分钟），期间请勿关闭页面。确定开始？`)) return;
 
         setIsAutoGenerating(true);
         try {
@@ -575,7 +581,7 @@ export default function Stage1Page() {
                         {/* One-shot Auto Generate */}
                         <div className="px-4 pb-4 shrink-0">
                             <Button
-                                onClick={handleAutoGenerate}
+                                onClick={() => handleAutoGenerate()}
                                 disabled={isAutoGenerating || isGeneratingSyn || isGeneratingOut || !concept.trim()}
                                 variant="secondary"
                                 size="lg"
