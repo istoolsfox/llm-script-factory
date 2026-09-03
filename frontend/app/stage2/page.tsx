@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { useProject } from "@/lib/contexts/project-context";
 import { api } from "@/lib/api";
 import { StageNav } from "@/components/stage-nav";
+import { AiChatPanel } from "@/components/ai-chat-panel";
 import { useLatestRequest } from "@/lib/hooks/use-request-guard";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
@@ -413,8 +414,6 @@ export default function Stage2Page() {
             <div className="px-4 py-3 border-b shrink-0">
                 <div className="flex items-center justify-between">
                     <div>
-                        <h1 className="text-xl font-bold">Stage 2: 结构构建 Structure Builder</h1>
-                        <p className="text-sm text-slate-500">将卡纲转化为 {progress?.total_episodes || "…"} 集详细大纲</p>
                     </div>
                     {progress && (
                         <div className="flex items-center gap-4 text-sm">
@@ -508,6 +507,19 @@ export default function Stage2Page() {
                         </div>
                     </div>
                 </div>
+
+                    {/* AI 对话修改：直接调整当前选中单元的大纲方向 */}
+                    <div className="border-t p-3 shrink-0 h-[260px] flex">
+                        <AiChatPanel
+                            project={activeProject.name}
+                            target="stage2_unit"
+                            label={`卡${detailedCards[selectedCardIndex]?.card_id || selectedCardIndex + 1} · 单元${selectedUnitIndex + 1}`}
+                            extra={{ card_index: selectedCardIndex, unit_index: selectedUnitIndex }}
+                            onUpdated={loadData}
+                            placeholder="例：这一段节奏太慢，第2集加大反转；按海外本习惯加钩子..."
+                            className="flex-1"
+                        />
+                    </div>
 
                 {/* Right: Detail Panel */}
                 <div className="flex-1 flex flex-col overflow-hidden">

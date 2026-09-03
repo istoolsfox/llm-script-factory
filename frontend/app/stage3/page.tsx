@@ -331,8 +331,6 @@ export default function Stage3Page() {
             <div className="px-4 py-3 border-b shrink-0">
                 <div className="flex items-center justify-between">
                     <div>
-                        <h1 className="text-xl font-bold">Stage 3: 集纲编写 Scene Writer</h1>
-                        <p className="text-sm text-slate-500">将粗分集转化为详细集纲 (含场景、台词、卡点)</p>
                     </div>
                     <div className="flex items-center gap-4 text-sm">
                         <div className="flex items-center gap-2">

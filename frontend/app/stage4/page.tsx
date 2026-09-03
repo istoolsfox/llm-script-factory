@@ -326,8 +326,6 @@ export default function Stage4Page() {
             <div className="px-4 py-3 border-b shrink-0">
                 <div className="flex items-center justify-between">
                     <div>
-                        <h1 className="text-xl font-bold">Stage 4: 剧本撰写 Script Writer</h1>
-                        <p className="text-sm text-slate-500">将集纲转化为完整剧本 (含场景、台词、动作)</p>
                     </div>
                     <div className="flex items-center gap-4 text-sm">
                         <div className="flex items-center gap-2">

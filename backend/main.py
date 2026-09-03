@@ -18,6 +18,7 @@ from api.routers.settings import router as settings_router
 from api.routers.bible import router as bible_router
 from api.routers.version import router as version_router
 from api.routers.rewrite import router as rewrite_router
+from api.routers.chat import router as chat_router
 
 load_dotenv() 
 setup_chinese_logging()
@@ -53,6 +54,7 @@ app.include_router(settings_router)
 app.include_router(bible_router)
 app.include_router(version_router)
 app.include_router(rewrite_router)
+app.include_router(chat_router)
 
 
 # =============================================================================

@@ -362,8 +362,6 @@ export default function Stage5Page() {
             <div className="px-4 py-3 border-b shrink-0">
                 <div className="flex items-center justify-between">
                     <div>
-                        <h1 className="text-xl font-bold">Stage 5: 正文精修 Script Polisher</h1>
-                        <p className="text-sm text-slate-500">将粗糙剧本转化为标准拍摄脚本 (格式化、去形容词、动作切片)</p>
                     </div>
                     <div className="flex items-center gap-4 text-sm">
                         <Button

@@ -359,8 +359,6 @@ export default function Stage6Page() {
             <div className="px-4 py-3 border-b shrink-0">
                 <div className="flex items-center justify-between">
                     <div>
-                        <h1 className="text-xl font-bold">Stage 6: 剧本医生 Script Doctor</h1>
-                        <p className="text-sm text-slate-500">单集深度诊断与定向润色</p>
                     </div>
                     <div className="flex items-center gap-4 text-sm">
                         <Button

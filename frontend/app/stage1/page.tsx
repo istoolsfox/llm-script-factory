@@ -10,7 +10,6 @@ import { Textarea } from "@/components/ui/textarea";
 import MDEditor from "@uiw/react-md-editor";
 import { Input } from "@/components/ui/input"; // Added import
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
-import { Group, Panel, Separator } from "react-resizable-panels";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Badge } from "@/components/ui/badge";
 import { Loader2, Save, Play, RefreshCw, FileText, Pencil, Sparkles } from "lucide-react";
@@ -18,6 +17,8 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
 import { WorldBible } from "@/components/world-bible";
+import { AiChatPanel } from "@/components/ai-chat-panel";
+import { cn } from "@/lib/utils";
 import { StageNav } from "@/components/stage-nav";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
 
@@ -46,11 +47,15 @@ export default function Stage1Page() {
     const [isSaving, setIsSaving] = useState(false);
     const [detailInstruction, setDetailInstruction] = useState("");
 
-    // Edit Mode
-    const [isEditMode, setIsEditMode] = useState(false);
+    // Edit Mode (per-tab: only edit the currently selected tab)
+    const [editTab, setEditTab] = useState<string | null>(null);
+    const isEditMode = editTab !== null;
 
     // Active Tab (for syncing header tabs with content)
-    const [activeTab, setActiveTab] = useState("synopsis");
+        const [activeTab, setActiveTab] = useState("synopsis");
+    const handleTabChange = (v: string) => { setEditTab(null); setActiveTab(v); };
+    const chatTarget = activeTab === "synopsis" ? "synopsis" : activeTab === "outline" ? "rough_outline" : activeTab === "detailed" ? "detailed_cards" : activeTab === "characters" ? "characters_rel" : "world_bible";
+    const chatLabel = activeTab === "synopsis" ? "剧情梗概" : activeTab === "outline" ? "粗大纲" : activeTab === "detailed" ? "详细卡纲" : activeTab === "characters" ? "人物" : "世界设定";
 
     // Load default template from backend
     const loadDefaultTemplate = async () => {
@@ -321,7 +326,7 @@ export default function Stage1Page() {
                 });
             }
             toast.success("已保存所有内容");
-            setIsEditMode(false);
+            setEditTab(null);
         } catch (e: any) {
             toast.error("保存失败: " + e.message);
         } finally {
@@ -448,20 +453,14 @@ export default function Stage1Page() {
             <StageNav current={1} />
             <div className="flex-1 flex flex-col space-y-4 p-6 overflow-hidden">
             <div className="flex items-center justify-between shrink-0">
-                <div>
-                    <h1 className="text-2xl font-bold tracking-tight">Stage 1: 创意孵化 Idea Lab</h1>
-                    <p className="text-slate-500 text-sm">输入核心创意，生成短剧梗概与粗大纲。</p>
-                </div>
-                <div className="flex items-center gap-2">
-                    {/* Global Save or Actions */}
-                </div>
             </div>
 
-            <Group orientation="horizontal" className="flex-1 border rounded-lg overflow-hidden bg-white dark:bg-slate-950 shadow-sm">
+            <div className="flex-1 flex min-h-0 border rounded-lg overflow-hidden bg-white dark:bg-slate-950 shadow-sm">
 
-                <Panel id="left-panel" defaultSize="50%" minSize="30%" maxSize="70%" className="flex flex-col">
-                    <div className="flex flex-col h-full bg-slate-50/50 dark:bg-slate-900/50">
+                <div className={cn("flex flex-col min-w-0 bg-slate-50/50 dark:bg-slate-900/50 transition-all duration-500 ease-out", synopsisData ? "w-[400px] shrink-0 border-r" : "w-full")}>
+                    <div className="flex flex-col h-full overflow-hidden">
 
+                        {!synopsisData ? (<>
                         {/* 1. Concept Section */}
                         <div className="flex-1 flex flex-col min-h-0 p-4 pb-2">
                             <div className="flex items-center justify-between mb-2 shrink-0">
@@ -594,56 +593,92 @@ export default function Stage1Page() {
                                 )}
                             </Button>
                         </div>
-
-                    </div>
-                </Panel>
-
-                <Separator className="w-px bg-border" />
-
-                {/* Right Panel: Data Display */}
-                <Panel id="right-panel" defaultSize="50%" minSize="30%" className="flex flex-col">
-                    {/* Header with Toggle - Fixed Height */}
-                    <div className="px-4 h-12 border-b flex items-center justify-between bg-white dark:bg-slate-950 shrink-0">
-                        {!isEditMode ? (
-                            <Tabs value={activeTab} onValueChange={setActiveTab} className="flex-1">
-                                <TabsList>
-                                    <TabsTrigger value="synopsis">剧情梗概</TabsTrigger>
-                                    <TabsTrigger value="outline" disabled={!synopsisData}>粗大纲 (8 Beats)</TabsTrigger>
-                                    <TabsTrigger value="detailed" disabled={!outlineData}>详细卡纲</TabsTrigger>
-                                    <TabsTrigger value="bible">世界设定</TabsTrigger>
-                                </TabsList>
-                            </Tabs>
+                        </>
                         ) : (
-                            <span className="font-semibold text-sm flex items-center gap-2">
-                                <Pencil size={14} /> 编辑模式
-                            </span>
+                        /* 生成完成后：左栏收缩为 AI 对话修改面板 */
+                        <div className="flex flex-col h-full gap-3 p-3 overflow-hidden">
+                            <AiChatPanel
+                                project={activeProject.name}
+                                target={chatTarget}
+                                label={chatLabel}
+                                onUpdated={loadData}
+                                className="flex-1"
+                            />
+                            <details className="shrink-0 group">
+                                <summary className="text-xs text-slate-500 cursor-pointer select-none hover:text-slate-700 dark:hover:text-slate-300">
+                                    ✏️ 编辑核心创意
+                                </summary>
+                                <div className="mt-2 rounded-md border overflow-hidden" data-color-mode="light">
+                                    <MDEditor
+                                        value={concept}
+                                        onChange={(val) => setConcept(val || "")}
+                                        height={180}
+                                        preview="edit"
+                                        visibleDragbar={false}
+                                    />
+                                </div>
+                            </details>
+                            <div className="shrink-0 flex items-end gap-2 flex-wrap">
+                                <div className="w-20">
+                                    <Label className="text-[10px] text-slate-500 mb-0.5 block">卡数</Label>
+                                    <Input type="number" min={1} max={20} value={cardCount}
+                                        onChange={(e) => setCardCount(Math.max(1, Number(e.target.value) || 8))}
+                                        disabled={isAutoGenerating} className="h-8 text-xs" />
+                                </div>
+                                <div className="w-24">
+                                    <Label className="text-[10px] text-slate-500 mb-0.5 block">每卡集数</Label>
+                                    <Input type="number" min={1} max={30} value={episodesPerCard}
+                                        onChange={(e) => setEpisodesPerCard(Math.max(1, Number(e.target.value) || 10))}
+                                        disabled={isAutoGenerating} className="h-8 text-xs" />
+                                </div>
+                                <div className="text-[10px] text-slate-500 pb-2">共 {cardCount * episodesPerCard} 集</div>
+                            </div>
+                            <div className="shrink-0 grid grid-cols-2 gap-2">
+                                <Button onClick={handleGenerateOutline} disabled={isGeneratingOut || !synopsisData} variant="outline" size="sm">
+                                    {isGeneratingOut ? <><Loader2 className="mr-1 h-3 w-3 animate-spin" /> 生成中...</> : <><RefreshCw className="mr-1 h-3 w-3" /> 生成大纲</>}
+                                </Button>
+                                <Button onClick={() => handleAutoGenerate()} disabled={isAutoGenerating || isGeneratingSyn || isGeneratingOut || !concept.trim()} variant="secondary" size="sm">
+                                    {isAutoGenerating ? <><Loader2 className="mr-1 h-3 w-3 animate-spin" /> {autoStep || "生成中..."}</> : <><Sparkles className="mr-1 h-3 w-3" /> ⚡ 一键生成全部</>}
+                                </Button>
+                            </div>
+                        </div>
                         )}
 
+                    </div>
+
+                {/* Right Panel: Data Display */}
+                {synopsisData && (
+                <div className="flex-1 flex flex-col min-w-0">
+                    {/* Header with Toggle - Fixed Height */}
+                    <div className="px-4 h-12 border-b flex items-center justify-between bg-white dark:bg-slate-950 shrink-0">
+                        <Tabs value={activeTab} onValueChange={handleTabChange} className="flex-1">
+                            <TabsList>
+                                <TabsTrigger value="synopsis">剧情梗概</TabsTrigger>
+                                <TabsTrigger value="outline" disabled={!synopsisData}>粗大纲</TabsTrigger>
+                                <TabsTrigger value="characters" disabled={!synopsisData}>人物</TabsTrigger>
+                                <TabsTrigger value="detailed" disabled={!outlineData}>详细卡纲</TabsTrigger>
+                                <TabsTrigger value="bible">世界设定</TabsTrigger>
+                            </TabsList>
+                        </Tabs>
+
                         <div className="flex items-center gap-3">
-                            {isEditMode && (
+                            {(activeTab === "synopsis" || activeTab === "outline" || activeTab === "detailed") && (
                                 <Button
-                                    variant="default"
+                                    variant={editTab === activeTab ? "default" : "outline"}
                                     size="sm"
-                                    onClick={handleSaveAll}
-                                    disabled={isSaving}
+                                    onClick={() => setEditTab(editTab === activeTab ? null : activeTab)}
                                 >
-                                    {isSaving ? (
-                                        <Loader2 className="mr-1 h-3 w-3 animate-spin" />
+                                    {editTab === activeTab ? (
+                                        <>
+                                            <Save className="mr-1 h-3 w-3" />
+                                            {isSaving ? <Loader2 className="mr-1 h-3 w-3 animate-spin" /> : null}
+                                            保存本页
+                                        </>
                                     ) : (
-                                        <Save className="mr-1 h-3 w-3" />
+                                        <><Pencil size={12} className="mr-1" /> 编辑本页</>
                                     )}
-                                    保存
                                 </Button>
                             )}
-                            <div className="flex items-center gap-2">
-                                <Switch
-                                    id="edit-mode"
-                                    checked={isEditMode}
-                                    onCheckedChange={setIsEditMode}
-                                    disabled={!synopsisData}
-                                />
-                                <Label htmlFor="edit-mode" className="text-xs cursor-pointer">编辑</Label>
-                            </div>
                         </div>
                     </div>
 
@@ -652,7 +687,7 @@ export default function Stage1Page() {
                         <ScrollArea className="flex-1 min-h-0">
                             <div className="p-6 space-y-8 max-w-4xl mx-auto">
                                 {/* Synopsis Section */}
-                                <section className="space-y-4">
+                                <section className="space-y-4" hidden={editTab !== "synopsis"}>
                                     <h2 className="text-xl font-bold">剧情梗概</h2>
 
                                     <div className="grid grid-cols-2 gap-4">
@@ -747,7 +782,7 @@ export default function Stage1Page() {
                                 </section>
 
                                 {/* Outline Section */}
-                                {outlineData && (
+                                {editTab === "outline" && outlineData && (
                                     <section className="space-y-4">
                                         <h2 className="text-xl font-bold">粗大纲 (8 Cards)</h2>
 
@@ -771,7 +806,7 @@ export default function Stage1Page() {
                                 )}
 
                                 {/* Detailed Cards Section (Step 3) */}
-                                {detailedCards.length > 0 && (
+                                {editTab === "detailed" && detailedCards.length > 0 && (
                                     <section className="space-y-4">
                                         <h2 className="text-xl font-bold">详细卡纲 (Step 3)</h2>
 
@@ -1084,17 +1119,27 @@ export default function Stage1Page() {
                                 </ScrollArea>
                             </TabsContent>
 
+                            <TabsContent value="characters" className="flex-1 p-0 m-0 overflow-hidden">
+                                <ScrollArea className="h-full">
+                                    <div className="h-full">
+                                        <WorldBible synopsis={synopsisData} concept={concept} only={["characters", "relationships"]} />
+                                    </div>
+                                </ScrollArea>
+                            </TabsContent>
+
                             <TabsContent value="bible" className="flex-1 p-0 m-0 overflow-hidden">
                                 <ScrollArea className="h-full">
                                     <div className="h-full">
-                                        <WorldBible synopsis={synopsisData} concept={concept} />
+                                        <WorldBible synopsis={synopsisData} concept={concept} only={["worldview", "main_plot"]} />
                                     </div>
                                 </ScrollArea>
                             </TabsContent>
                         </Tabs>
                     )}
-                </Panel>
-            </Group>
+                </div>
+                )}
+                </div>
+            </div>
             </div>
         </div>
     );

@@ -25,9 +25,11 @@ const COMPONENT_META: { key: Component; label: string; icon: any; color: string 
 interface WorldBibleProps {
     synopsis: any;
     concept: string;
+    /** 只渲染指定组件（默认全部四个）: worldview | main_plot | characters | relationships */
+    only?: Component[];
 }
 
-export function WorldBible({ synopsis, concept }: WorldBibleProps) {
+export function WorldBible({ synopsis, concept, only }: WorldBibleProps) {
     const { activeProject } = useProject();
     const loadGuard = useLatestRequest();
     const [data, setData] = useState<any>({});
@@ -382,7 +384,7 @@ export function WorldBible({ synopsis, concept }: WorldBibleProps) {
             </div>
 
             <div className="grid grid-cols-1 gap-4">
-                {COMPONENT_META.map(meta => {
+                {COMPONENT_META.filter(meta => !only || only.includes(meta.key)).map(meta => {
                     const Icon = meta.icon;
                     const hasData = !!data[meta.key];
                     return (
