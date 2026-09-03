@@ -645,6 +645,7 @@ export default function Stage1Page() {
                         )}
 
                     </div>
+                </div>
 
                 {/* Right Panel: Data Display */}
                 {synopsisData && (
@@ -1138,7 +1139,6 @@ export default function Stage1Page() {
                     )}
                 </div>
                 )}
-                </div>
             </div>
             </div>
         </div>
