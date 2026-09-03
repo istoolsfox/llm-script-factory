@@ -16,11 +16,13 @@ class ProjectService:
         self.files = None  # Lazy load or direct json usage
 
     def get_project_path(self, project_name: str) -> Optional[str]:
-        """Public helper to get absolute path of a project if it exists."""
-        if ".." in project_name or "/" in project_name or "\\" in project_name:
-             return None
+        """Public helper to get absolute path of a project. Raises ValueError if missing/invalid."""
+        if not project_name or ".." in project_name or "/" in project_name or "\\" in project_name:
+             raise ValueError(f"项目名非法: {project_name!r}")
         path = os.path.join(self.root_dir, project_name)
-        return path if os.path.exists(path) else None
+        if not os.path.exists(path):
+            raise ValueError(f"项目 '{project_name}' 不存在")
+        return path
 
     def list_projects(self) -> List[Dict]:
         """Scan projects directory and return metadata."""
