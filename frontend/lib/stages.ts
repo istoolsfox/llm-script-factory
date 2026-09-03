@@ -20,7 +20,7 @@ export interface StageMeta {
 
 export const STAGES: StageMeta[] = [
     { id: "stage1", key: "1_idea", step: 1, name: "创意孵化", en: "Idea Lab", hint: "输入核心创意，生成梗概与 8 卡大纲" },
-    { id: "stage2", key: "2_structure", step: 2, name: "结构构建", en: "Structure", hint: "把 8 卡展开为 80 集分集大纲" },
+    { id: "stage2", key: "2_structure", step: 2, name: "结构构建", en: "Structure", hint: "把卡纲展开为分集大纲（集数在 Stage 1 自由设置）" },
     { id: "stage3", key: "3_scene", step: 3, name: "分场编写", en: "Scene Writer", hint: "为每一集划分场次与冲突点" },
     { id: "stage4", key: "4_script", step: 4, name: "剧本撰写", en: "Script Writer", hint: "按批次生成完整剧本正文" },
     { id: "stage5", key: "5_refine", step: 5, name: "润色优化", en: "Polisher", hint: "批量打磨台词、节奏与爽感" },

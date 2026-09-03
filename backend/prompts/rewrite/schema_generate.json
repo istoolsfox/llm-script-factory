@@ -1,0 +1,20 @@
+{
+    "type": "object",
+    "required": ["title", "logline", "concept"],
+    "properties": {
+        "title": {"type": "string"},
+        "logline": {"type": "string"},
+        "concept": {"type": "string"},
+        "selling_points_mapping": {
+            "type": "array",
+            "items": {
+                "type": "object",
+                "properties": {
+                    "original": {"type": "string"},
+                    "new": {"type": "string"}
+                },
+                "required": ["original", "new"]
+            }
+        }
+    }
+}

@@ -45,8 +45,7 @@ interface S2Episode {
 }
 
 const BATCH_SIZE = 3;
-const TOTAL_EPISODES = 80;
-const TOTAL_BATCHES = Math.ceil(TOTAL_EPISODES / BATCH_SIZE);
+const DEFAULT_TOTAL_EPISODES = 40;
 const GENERATION_TIMEOUT_MS = 15 * 60 * 1000;
 
 export default function Stage3Page() {
@@ -55,6 +54,7 @@ export default function Stage3Page() {
 
     // Data State
     const [s2Outlines, setS2Outlines] = useState<S2Episode[]>([]);
+    const [totalEpisodes, setTotalEpisodes] = useState(DEFAULT_TOTAL_EPISODES);
     const [s3Outlines, setS3Outlines] = useState<Episode[]>([]);
 
     // UI State
@@ -95,6 +95,8 @@ export default function Stage3Page() {
             const s2Res = await api.get(`/api/stage3/s2-outlines?project=${encodeURIComponent(activeProject.name)}`);
             if (loadGuard.isStale(seq)) return;
             setS2Outlines(s2Res.outlines || []);
+            const maxEp = (s2Res.outlines || []).reduce((m: number, ep: S2Episode) => Math.max(m, ep.ep_id || 0), 0);
+            if (maxEp > 0) setTotalEpisodes(maxEp);
 
             // Load S3 outlines
             const s3Res = await api.get(`/api/stage3/outlines?project=${encodeURIComponent(activeProject.name)}`);
@@ -117,7 +119,7 @@ export default function Stage3Page() {
 
     const updateEditingEpisodes = (batchIndex: number, allOutlines: Episode[]) => {
         const startEp = batchIndex * BATCH_SIZE + 1;
-        const endEp = Math.min((batchIndex + 1) * BATCH_SIZE, TOTAL_EPISODES);
+        const endEp = Math.min((batchIndex + 1) * BATCH_SIZE, totalEpisodes);
         const batchEpisodes = allOutlines.filter(
             ep => ep.ep_id >= startEp && ep.ep_id <= endEp
         ).sort((a, b) => a.ep_id - b.ep_id);
@@ -134,7 +136,7 @@ export default function Stage3Page() {
         if (!activeProject) return;
 
         const startEp = selectedBatchIndex * BATCH_SIZE + 1;
-        const endEp = Math.min((selectedBatchIndex + 1) * BATCH_SIZE, TOTAL_EPISODES);
+        const endEp = Math.min((selectedBatchIndex + 1) * BATCH_SIZE, totalEpisodes);
 
         setIsGenerating(true);
         toast.info(`正在生成第 ${startEp}-${endEp} 集集纲...（预计需要几分钟）`);
@@ -175,7 +177,7 @@ export default function Stage3Page() {
                 await loadData();
 
                 // Auto-advance to next batch if not at the last one
-                if (selectedBatchIndex < TOTAL_BATCHES - 1) {
+                if (selectedBatchIndex < Math.ceil(totalEpisodes / BATCH_SIZE) - 1) {
                     setSelectedBatchIndex(selectedBatchIndex + 1);
                 }
             }
@@ -241,7 +243,7 @@ export default function Stage3Page() {
     // --- Helpers ---
     const getBatchStatus = (batchIndex: number): 'complete' | 'partial' | 'empty' => {
         const startEp = batchIndex * BATCH_SIZE + 1;
-        const endEp = Math.min((batchIndex + 1) * BATCH_SIZE, TOTAL_EPISODES);
+        const endEp = Math.min((batchIndex + 1) * BATCH_SIZE, totalEpisodes);
         const expectedCount = endEp - startEp + 1;
         const count = s3Outlines.filter(ep => ep.ep_id >= startEp && ep.ep_id <= endEp).length;
         if (count >= expectedCount) return 'complete';
@@ -268,7 +270,7 @@ export default function Stage3Page() {
     const getProgress = () => {
         return {
             completed: s3Outlines.length,
-            total: TOTAL_EPISODES
+            total: totalEpisodes
         };
     };
 
@@ -389,11 +391,11 @@ export default function Stage3Page() {
                     </div>
                     <div className="flex-1 overflow-y-auto">
                         <div className="p-2 space-y-1">
-                            {Array.from({ length: TOTAL_BATCHES }, (_, idx) => {
+                            {Array.from({ length: Math.ceil(totalEpisodes / BATCH_SIZE) }, (_, idx) => {
                                 const status = getBatchStatus(idx);
                                 const isSelected = idx === selectedBatchIndex;
                                 const startEp = idx * BATCH_SIZE + 1;
-                                const endEp = Math.min((idx + 1) * BATCH_SIZE, TOTAL_EPISODES);
+                                const endEp = Math.min((idx + 1) * BATCH_SIZE, totalEpisodes);
                                 return (
                                     <button
                                         key={idx}
@@ -430,7 +432,7 @@ export default function Stage3Page() {
                             <div>
                                 <h2 className="text-lg font-semibold">
                                     Batch {selectedBatchIndex + 1}:
-                                    第 {selectedBatchIndex * BATCH_SIZE + 1} - {Math.min((selectedBatchIndex + 1) * BATCH_SIZE, TOTAL_EPISODES)} 集
+                                    第 {selectedBatchIndex * BATCH_SIZE + 1} - {Math.min((selectedBatchIndex + 1) * BATCH_SIZE, totalEpisodes)} 集
                                 </h2>
                             </div>
                             <div className="flex gap-2">

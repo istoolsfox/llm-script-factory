@@ -13,7 +13,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/com
 import { Group, Panel, Separator } from "react-resizable-panels";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Badge } from "@/components/ui/badge";
-import { Loader2, Save, Play, RefreshCw, FileText, Pencil } from "lucide-react";
+import { Loader2, Save, Play, RefreshCw, FileText, Pencil, Sparkles } from "lucide-react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
@@ -33,8 +33,14 @@ export default function Stage1Page() {
     const [outlineData, setOutlineData] = useState<any>(null);
     const [detailedCards, setDetailedCards] = useState<any[]>([]);
 
+    // Outline config (卡数 / 每卡集数)
+    const [cardCount, setCardCount] = useState(8);
+    const [episodesPerCard, setEpisodesPerCard] = useState(10);
+
     // Loading States
     const [isGeneratingSyn, setIsGeneratingSyn] = useState(false);
+    const [isAutoGenerating, setIsAutoGenerating] = useState(false);
+    const [autoStep, setAutoStep] = useState("");
     const [isGeneratingOut, setIsGeneratingOut] = useState(false);
     const [isGeneratingDetail, setIsGeneratingDetail] = useState(false);
     const [isSaving, setIsSaving] = useState(false);
@@ -144,6 +150,10 @@ export default function Stage1Page() {
             } else {
                 setConcept("");  // No saved concept, start empty
             }
+            if (res.config) {
+                setCardCount(res.config.card_count || 8);
+                setEpisodesPerCard(res.config.episodes_per_card || 10);
+            }
         } catch (e) {
             if (loadGuard.isStale(seq)) return;
             console.error("Failed to load stage1 data");
@@ -194,7 +204,9 @@ export default function Stage1Page() {
             const res = await api.post("/api/stage1/outline/generate", {
                 project_name: activeProject.name,
                 synopsis_data: synopsisData,
-                concept    // Pass user input to save before generation
+                concept,    // Pass user input to save before generation
+                card_count: cardCount,
+                episodes_per_card: episodesPerCard
             }, { timeoutMs: 10 * 60 * 1000 });
 
             if (res.success && res.data) {
@@ -206,6 +218,44 @@ export default function Stage1Page() {
             toast.error(e.message || "生成失败");
         } finally {
             setIsGeneratingOut(false);
+        }
+    };
+
+    // 一键生成：背景故事(世界设定) → 梗概 → 粗大纲 → 全部详细卡纲
+    const handleAutoGenerate = async () => {
+        if (!activeProject) return;
+        if (!concept.trim()) {
+            toast.error("请先填写核心创意（或在世界设定中填好背景故事）");
+            return;
+        }
+        const total = cardCount * episodesPerCard;
+        if (!window.confirm(`将自动完成：梗概 → ${cardCount}卡粗大纲 → 全部详细卡纲（共约 ${total} 集）。\n耗时较长（可能5-15分钟），期间请勿关闭页面。确定开始？`)) return;
+
+        setIsAutoGenerating(true);
+        try {
+            setAutoStep("生成剧情梗概...");
+            const res = await api.post("/api/stage1/auto-generate", {
+                project_name: activeProject.name,
+                concept,
+                card_count: cardCount,
+                episodes_per_card: episodesPerCard,
+                detail_instruction: detailInstruction || null
+            }, { timeoutMs: 30 * 60 * 1000 });
+
+            if (res.success && res.data) {
+                setSynopsisData(res.data.synopsis || null);
+                setOutlineData(res.data.outline || null);
+                setDetailedCards(res.data.detailed_cards || []);
+                toast.success("一键生成完成！所有步骤已自动保存");
+                setActiveTab("detailed");
+            } else {
+                toast.warning("返回格式异常，请刷新查看");
+            }
+        } catch (e: any) {
+            toast.error("一键生成失败: " + e.message);
+        } finally {
+            setIsAutoGenerating(false);
+            setAutoStep("");
         }
     };
 
@@ -283,7 +333,8 @@ export default function Stage1Page() {
                 project_name: activeProject.name,
                 card_indices: cardIndices,
                 concept,    // Pass user input to save before generation
-                detail_instruction: detailInstruction  // User's custom instruction
+                detail_instruction: detailInstruction,  // User's custom instruction
+                episodes_per_card: episodesPerCard
             }, { timeoutMs: 10 * 60 * 1000 });
 
             console.log("Step 3 API response:", res);
@@ -475,8 +526,25 @@ export default function Stage1Page() {
                             </div>
                         </div>
 
+                        {/* Outline Config */}
+                        <div className="px-4 pb-2 shrink-0 flex items-end gap-2 flex-wrap">
+                            <div className="w-24">
+                                <Label className="text-xs text-slate-500 mb-1 block">卡数</Label>
+                                <Input type="number" min={1} max={20} value={cardCount}
+                                    onChange={(e) => setCardCount(Math.max(1, Number(e.target.value) || 8))}
+                                    disabled={isAutoGenerating} className="h-9" />
+                            </div>
+                            <div className="w-28">
+                                <Label className="text-xs text-slate-500 mb-1 block">每卡集数</Label>
+                                <Input type="number" min={1} max={30} value={episodesPerCard}
+                                    onChange={(e) => setEpisodesPerCard(Math.max(1, Number(e.target.value) || 10))}
+                                    disabled={isAutoGenerating} className="h-9" />
+                            </div>
+                            <div className="text-xs text-slate-500 pb-2.5">共 {cardCount * episodesPerCard} 集（海外本建议 35-40 集，如 4卡×10集）</div>
+                        </div>
+
                         {/* Action Section */}
-                        <div className="p-4 pt-4 shrink-0 flex gap-2">
+                        <div className="p-4 pt-1 shrink-0 flex gap-2">
                             <Button
                                 onClick={handleGenerateSynopsis}
                                 disabled={isGeneratingSyn || !concept.trim()}
@@ -500,6 +568,23 @@ export default function Stage1Page() {
                                     <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> 生成中...</>
                                 ) : (
                                     <><RefreshCw className="mr-2 h-4 w-4" /> 生成大纲</>
+                                )}
+                            </Button>
+                        </div>
+
+                        {/* One-shot Auto Generate */}
+                        <div className="px-4 pb-4 shrink-0">
+                            <Button
+                                onClick={handleAutoGenerate}
+                                disabled={isAutoGenerating || isGeneratingSyn || isGeneratingOut || !concept.trim()}
+                                variant="secondary"
+                                size="lg"
+                                className="w-full transition-all"
+                            >
+                                {isAutoGenerating ? (
+                                    <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> {autoStep || "一键生成中..."}（请勿关闭页面）</>
+                                ) : (
+                                    <><Sparkles className="mr-2 h-4 w-4" /> ⚡ 一键生成全部（梗概→大纲→详细卡纲）</>
                                 )}
                             </Button>
                         </div>
@@ -885,7 +970,7 @@ export default function Stage1Page() {
                                         {/* Generation Buttons */}
                                         <div className="flex flex-wrap gap-2 mb-6">
                                             <span className="text-sm text-slate-500 mr-2 self-center">生成详细卡纲:</span>
-                                            {[0, 2, 4, 6].map((startIdx) => {
+                                            {Array.from({ length: Math.ceil((outlineData?.rough_skeleton?.length || cardCount) / 2) }, (_, i) => i * 2).map((startIdx) => {
                                                 const hasCards = detailedCards.some((c: any) => c.card_id === startIdx + 1 || c.card_id === startIdx + 2);
                                                 return (
                                                     <Button

@@ -11,7 +11,8 @@ from api.schemas import (
     OutlineGenerateRequest,
     Stage1SaveRequest,
     DetailedGenerateRequest,
-    ConceptPolishRequest
+    ConceptPolishRequest,
+    AutoGenerateRequest
 )
 
 router = APIRouter(prefix="/api/stage1", tags=["stage1"])
@@ -65,7 +66,9 @@ def generate_outline(payload: OutlineGenerateRequest):
         result = service.generate_rough_outline(
             project_name=payload.project_name,
             synopsis_data=payload.synopsis_data,
-            concept=payload.concept
+            concept=payload.concept,
+            card_count=payload.card_count,
+            episodes_per_card=payload.episodes_per_card
         )
         return {"success": True, "data": result}
     except ValueError as e:
@@ -137,7 +140,8 @@ def generate_detailed(payload: DetailedGenerateRequest):
             project_name=payload.project_name,
             card_indices=payload.card_indices,
             concept=payload.concept,
-            detail_instruction=payload.detail_instruction
+            detail_instruction=payload.detail_instruction,
+            episodes_per_card=payload.episodes_per_card
         )
         return {"success": True, "data": result}
     except ValueError as e:
@@ -154,6 +158,34 @@ def save_detailed(payload: Stage1SaveRequest):
         return {"success": True, "message": "Detailed cards saved"}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
+
+# =============================================================================
+# AUTO GENERATE (one-shot from background story)
+# =============================================================================
+
+@router.post("/auto-generate")
+def auto_generate(payload: AutoGenerateRequest):
+    """背景故事/概念 → 梗概 → 粗大纲 → 全部详细卡纲，一键生成。"""
+    try:
+        data = service.auto_generate(
+            project_name=payload.project_name,
+            card_count=payload.card_count,
+            episodes_per_card=payload.episodes_per_card,
+            concept=payload.concept,
+            detail_instruction=payload.detail_instruction
+        )
+        return {"success": True, "data": data}
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/outline-config")
+def get_outline_config(project: str):
+    """Load saved outline config (card_count / episodes_per_card)."""
+    return service.get_outline_config(project)
 
 
 # =============================================================================

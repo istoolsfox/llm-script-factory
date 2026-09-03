@@ -414,7 +414,7 @@ export default function Stage2Page() {
                 <div className="flex items-center justify-between">
                     <div>
                         <h1 className="text-xl font-bold">Stage 2: 结构构建 Structure Builder</h1>
-                        <p className="text-sm text-slate-500">将粗大纲转化为 80 集详细大纲</p>
+                        <p className="text-sm text-slate-500">将卡纲转化为 {progress?.total_episodes || "…"} 集详细大纲</p>
                     </div>
                     {progress && (
                         <div className="flex items-center gap-4 text-sm">

@@ -100,14 +100,17 @@ class Stage1Service(BaseService):
         self,
         project_name: str,
         concept: str,
-        temperature: float = 0.7
+        temperature: float = 0.7,
+        background: Optional[str] = None
     ) -> Dict:
-        """Generate synopsis (concept → synopsis)."""
+        """Generate synopsis (concept → synopsis). `background` injects world settings."""
         user_content = self.prompts.render(
             self.TMPL_SYNOPSIS_USER,
             concept=concept,
             full_context=""
         )
+        if background:
+            user_content += "\n\n-----\n\n**背景故事（世界观/主线/人物，必须严格遵守）**:\n" + background
 
         # Save user input for later use (Step 2)
         self._save_user_input(project_name, concept)
@@ -136,12 +139,19 @@ class Stage1Service(BaseService):
         project_name: str,
         synopsis_data: Dict,
         concept: Optional[str] = None,
-        temperature: float = 0.7
+        temperature: float = 0.7,
+        card_count: int = None,
+        episodes_per_card: int = None
     ) -> Dict:
-        """Generate rough outline (synopsis → 8-card outline)."""
-        # Save user input if provided
-        if concept is not None:
-            self._save_user_input(project_name, concept)
+        """Generate rough outline (synopsis → N-card outline)."""
+        # Persist config and resolve effective values
+        config = self._save_user_config(
+            project_name,
+            card_count=card_count,
+            episodes_per_card=episodes_per_card
+        )
+        card_count = config["card_count"]
+        episodes_per_card = config["episodes_per_card"]
 
         # Load user input for template
         user_input = self._load_user_input(project_name)
@@ -151,7 +161,10 @@ class Stage1Service(BaseService):
             self.TMPL_ROUGH_USER,
             prev_data=synopsis_data,
             concept=concept_val,
-            full_context=""
+            full_context="",
+            card_count=card_count,
+            episodes_per_card=episodes_per_card,
+            total_episodes=card_count * episodes_per_card
         )
 
         model_key, temperature = self.resolve_model_key(project_name, "stage1")
@@ -179,15 +192,17 @@ class Stage1Service(BaseService):
         card_indices: list,
         concept: Optional[str] = None,
         detail_instruction: Optional[str] = None,
+        episodes_per_card: int = None,
         temperature: float = 0.7
     ) -> Dict:
         """
         Generate detailed card outlines (Step 3).
 
         Args:
-            card_indices: List of card indices (0-7) to generate, e.g. [0, 1] for cards 1-2
+            card_indices: List of card indices (0-based) to generate, e.g. [0, 1] for cards 1-2
             concept: User input - core concept (optional, will save if provided)
             detail_instruction: User's custom instruction (highest priority)
+            episodes_per_card: Episodes per card (falls back to saved config)
         """
         # Save user input if provided
         if concept is not None:
@@ -198,6 +213,12 @@ class Stage1Service(BaseService):
         rough_skeleton = story_bible.get("rough_skeleton", [])
         if not rough_skeleton:
             raise ValueError("请先生成粗大纲 (Step 2)")
+
+        # Resolve card count / episodes config
+        config = self._save_user_config(project_name, episodes_per_card=episodes_per_card)
+        card_count = len(rough_skeleton) if isinstance(rough_skeleton, list) else config["card_count"]
+        episodes_per_card = config["episodes_per_card"]
+        card_ranges = self._card_episode_ranges(card_count, episodes_per_card)
 
         # Load synopsis for context (Step 1 data)
         synopsis = story_bible.get("synopsis", {})
@@ -219,7 +240,10 @@ class Stage1Service(BaseService):
             detail_instruction=detail_instruction or "",
             synopsis=synopsis,
             rough_skeleton=rough_skeleton,
-            existing_detailed_cards=existing_detailed if existing_detailed else None
+            existing_detailed_cards=existing_detailed if existing_detailed else None,
+            card_count=card_count,
+            episodes_per_card=episodes_per_card,
+            card_ranges={cid: card_ranges[cid] for cid in card_ids if cid in card_ranges}
         )
 
         model_key, temperature = self.resolve_model_key(project_name, "stage1")
@@ -336,6 +360,117 @@ class Stage1Service(BaseService):
         except ValueError:
             return {}
 
+    def _save_user_config(self, project_name: str, card_count: int = None, episodes_per_card: int = None) -> Dict:
+        """
+        Persist outline config (card_count / episodes_per_card) into user_input.json.
+        Returns the merged config dict.
+        """
+        data = self._load_user_input(project_name)
+        if card_count is not None:
+            data["card_count"] = max(1, int(card_count))
+        if episodes_per_card is not None:
+            data["episodes_per_card"] = max(1, int(episodes_per_card))
+        data.setdefault("card_count", 8)
+        data.setdefault("episodes_per_card", 10)
+        self.files.save_json(self._get_user_input_path(project_name), data)
+        return data
+
+    def get_outline_config(self, project_name: str) -> Dict:
+        """Load saved outline config with defaults."""
+        data = self._load_user_input(project_name)
+        return {
+            "card_count": int(data.get("card_count", 8)),
+            "episodes_per_card": int(data.get("episodes_per_card", 10)),
+        }
+
+    def _card_episode_ranges(self, card_count: int, episodes_per_card: int) -> Dict[int, str]:
+        """Compute each card's absolute episode range, e.g. {1: "1-5", 2: "6-10"}."""
+        ranges = {}
+        for i in range(card_count):
+            start = i * episodes_per_card + 1
+            end = (i + 1) * episodes_per_card
+            ranges[i + 1] = f"{start}-{end}"
+        return ranges
+
+    # =========================================================================
+    # AUTO GENERATE (background story → synopsis → rough → detailed, one shot)
+    # =========================================================================
+
+    def _compose_background(self, project_name: str) -> str:
+        """Compose background story text from the Stage 1 Story Bible (world settings)."""
+        try:
+            from services.bible_service import BibleService
+            bible = BibleService().load_bible(project_name)
+        except Exception:
+            bible = {}
+        if not bible:
+            return ""
+        import json
+        parts = []
+        for key, label in (
+            ("worldview", "世界观设定"),
+            ("main_plot", "主线剧情"),
+            ("characters", "人物设定"),
+            ("relationships", "人物关系"),
+        ):
+            val = bible.get(key)
+            if not val:
+                continue
+            text = val if isinstance(val, str) else json.dumps(val, ensure_ascii=False, indent=1)
+            parts.append(f"【{label}】\n{text}")
+        return "\n\n".join(parts)
+
+    def auto_generate(
+        self,
+        project_name: str,
+        card_count: int = 8,
+        episodes_per_card: int = 10,
+        concept: Optional[str] = None,
+        detail_instruction: Optional[str] = None,
+    ) -> Dict:
+        """
+        One-shot generation from the background story:
+        synopsis → rough outline → detailed cards (all cards).
+        Uses the Story Bible (world settings) as background context when present.
+        """
+        background = self._compose_background(project_name)
+        user_data = self._load_user_input(project_name)
+        concept_val = concept or user_data.get("concept", "")
+
+        self._save_user_config(project_name, card_count=card_count, episodes_per_card=episodes_per_card)
+
+        # 1. Synopsis (with background story injected)
+        synopsis = self.generate_synopsis(project_name, concept_val, background=background)
+        if isinstance(synopsis, dict):
+            self.save_synopsis(project_name, synopsis)
+
+        # 2. Rough outline with configurable card count
+        rough = self.generate_rough_outline(
+            project_name, synopsis, concept=concept_val,
+            card_count=card_count, episodes_per_card=episodes_per_card
+        )
+        rough_data = rough.get("rough_skeleton", rough)
+        if rough_data:
+            self.save_rough_outline(project_name, {"rough_skeleton": rough_data})
+
+        # 3. Detailed cards — generate in batches of 2 cards, saving incrementally
+        rough_list = rough_data if isinstance(rough_data, list) else []
+        effective_cards = len(rough_list) or card_count
+        i = 0
+        while i < effective_cards:
+            batch = list(range(i, min(i + 2, effective_cards)))
+            detailed = self.generate_detailed_cards(
+                project_name, batch, concept=concept_val,
+                detail_instruction=detail_instruction,
+                episodes_per_card=episodes_per_card
+            )
+            detailed_data = detailed.get("detailed_cards", detailed) if isinstance(detailed, dict) else detailed
+            if detailed_data:
+                self.save_detailed_cards(project_name, {"detailed_cards": detailed_data})
+            i += 2
+
+        return self.load_stage1_data(project_name)
+
     def load_stage1_data(self, project_name: str) -> Dict:
         """Load synopsis, outline, and user input from project files."""
         story_bible = self._load_story_bible(project_name)
@@ -353,7 +488,8 @@ class Stage1Service(BaseService):
             "synopsis": story_bible.get("synopsis"),
             "outline": {"rough_skeleton": skeleton_array} if skeleton_array else None,
             "detailed_cards": story_bible.get("detailed_cards"),
-            "user_input": user_input
+            "user_input": user_input,
+            "config": self.get_outline_config(project_name)
         }
 
     # =========================================================================

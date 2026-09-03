@@ -18,6 +18,7 @@ import {
     Clapperboard,
     PenLine,
     LogOut,
+    Wand2,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
@@ -167,6 +168,7 @@ export function AppSidebar() {
     const stagesDone = activeProject?.stages;
 
     const toolItems = [
+        { name: "洗稿换皮", icon: Wand2, href: "/rewrite" },
         { name: "导入已有剧本", icon: Upload, href: "/import" },
         { name: "版本历史", icon: History, href: "/versions" },
     ];

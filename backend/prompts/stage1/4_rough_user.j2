@@ -5,14 +5,14 @@
 【重要：当前任务】
 
 **输出指令**:
-注意：现在你正在生成的是一部短剧的卡纲，每卡10集剧情，请以10集视角去设计每卡剧情。
+注意：现在你正在生成的是一部短剧的卡纲，全剧共 {{ total_episodes }} 集，每卡 {{ episodes_per_card }} 集剧情，请以每卡 {{ episodes_per_card }} 集的视角去设计每卡剧情。
 
 **输出要求**:
-1. 请生成 JSON 对象，包含 `rough_skeleton` 列表 (8个对象)。
+1. 请生成 JSON 对象，包含 `rough_skeleton` 列表 ({{ card_count }}个对象)。
 2. 每个对象包含:
-- `card_id`: 1-8
+- `card_id`: 1-{{ card_count }}
 - `one_sentence_summary`: **单卡内容梗概（每卡一整段，描述清晰）**。
-3. 共计8卡（每一卡10集剧情），在单卡内容梗概中，每个故事单元要写清楚其核心剧情（有明确爽点的剧情）。
+3. 共计{{ card_count }}卡（每一卡{{ episodes_per_card }}集剧情），在单卡内容梗概中，每个故事单元要写清楚其核心剧情（有明确爽点的剧情）。
 4. 每卡不是互相独立的剧情，各卡之间上下串联，是一个逻辑连贯的整体，不要写“离散”的剧情，要写整体连贯的剧情。
 
 **JSON 示例**:
@@ -22,7 +22,7 @@
     {"card_id": 1, "one_sentence_summary": "主角重生，获得金手指，打脸Boss1...（200字以内）"},
     {"card_id": 2, "one_sentence_summary": "主角遭遇商战...（200字以内）"},
     ...
-    {"card_id": 8, "one_sentence_summary": "大结局，主角战胜Boss3...（200字以内）"}
+    {"card_id": {{ card_count }}, "one_sentence_summary": "大结局，主角战胜Boss3...（200字以内）"}
   ]
 }
 ```

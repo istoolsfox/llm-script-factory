@@ -289,23 +289,35 @@ class Stage2Service(BaseService):
         """Load all data needed for Stage 2 UI."""
         story_bible = self.load_story_bible(project_name)
         outlines = self.load_outlines(project_name)
-        
+
         rough_skeleton = story_bible.get("rough_skeleton", [])
         if isinstance(rough_skeleton, dict) and "rough_skeleton" in rough_skeleton:
             rough_skeleton = rough_skeleton["rough_skeleton"]
-        
-        total_cards = len(rough_skeleton) if isinstance(rough_skeleton, list) else 0
-        total_episodes = total_cards * 10
+
+        detailed_cards = story_bible.get("detailed_cards", [])
+        total_cards = len(detailed_cards) if isinstance(detailed_cards, list) else 0
         completed_episodes = len(outlines)
-        
+
+        # Total episodes derived from detailed cards' episode ranges (not hardcoded).
+        total_episodes = 0
         completed_cards = 0
-        for i in range(total_cards):
-            start_ep = i * 10 + 1
-            end_ep = (i + 1) * 10
-            batch_count = len([ep for ep in outlines if start_ep <= ep.get("ep_id", 0) <= end_ep])
-            if batch_count == 10:
+        for card in detailed_cards if isinstance(detailed_cards, list) else []:
+            ranges = []
+            for unit in card.get("story_units", []):
+                try:
+                    start_ep, end_ep = self._parse_episode_range(unit.get("episodes", ""))
+                except ValueError:
+                    continue
+                ranges.append((start_ep, end_ep))
+            if not ranges:
+                continue
+            card_start = min(r[0] for r in ranges)
+            card_end = max(r[1] for r in ranges)
+            total_episodes = max(total_episodes, card_end)
+            covered = len([ep for ep in outlines if card_start <= ep.get("ep_id", 0) <= card_end])
+            if covered >= (card_end - card_start + 1):
                 completed_cards += 1
-        
+
         return {
             "story_bible": story_bible,
             "outlines": outlines,

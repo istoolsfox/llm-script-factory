@@ -1,0 +1,12 @@
+{
+    "type": "object",
+    "required": ["core_story", "selling_points", "highlights", "emotional_hooks", "character_archetypes", "structure_summary"],
+    "properties": {
+        "core_story": {"type": "string"},
+        "selling_points": {"type": "array", "items": {"type": "string"}},
+        "highlights": {"type": "array", "items": {"type": "string"}},
+        "emotional_hooks": {"type": "array", "items": {"type": "string"}},
+        "character_archetypes": {"type": "array", "items": {"type": "string"}},
+        "structure_summary": {"type": "string"}
+    }
+}

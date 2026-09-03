@@ -91,7 +91,7 @@ export async function fetchAPI(endpoint: string, options: RequestOptions = {}) {
 }
 
 // Endpoints that trigger an LLM call (and thus change token usage).
-const GENERATION_ENDPOINT_RE = /(\/generate|\/refine|\/analyze|\/polish|\/generate-bible|\/parse|\/parse-file)/;
+const GENERATION_ENDPOINT_RE = /(\/generate|\/refine|\/analyze|\/polish|\/extract|\/generate-bible|\/parse|\/parse-file)/;
 
 export const api = {
     get: (endpoint: string) => fetchAPI(endpoint, { method: 'GET' }),

@@ -43,6 +43,16 @@ class OutlineGenerateRequest(BaseModel):
     project_name: str
     synopsis_data: Dict[str, Any]
     concept: Optional[str] = None  # User input: core concept
+    card_count: Optional[int] = None  # Number of cards (default 8)
+    episodes_per_card: Optional[int] = None  # Episodes per card (default 10)
+
+class AutoGenerateRequest(BaseModel):
+    """Stage 1: one-shot generate synopsis → rough outline → detailed cards"""
+    project_name: str
+    concept: Optional[str] = None
+    card_count: int = 8
+    episodes_per_card: int = 10
+    detail_instruction: Optional[str] = None
 
 class Stage1SaveRequest(BaseModel):
     project_name: str
@@ -52,9 +62,22 @@ class Stage1SaveRequest(BaseModel):
 class DetailedGenerateRequest(BaseModel):
     """Stage 1 Step 3: Generate detailed card outlines"""
     project_name: str
-    card_indices: List[int]  # Card indices (0-7), e.g. [0, 1] for cards 1-2
+    card_indices: List[int]  # Card indices (0-based), e.g. [0, 1] for cards 1-2
     concept: Optional[str] = None  # User input: core concept
     detail_instruction: Optional[str] = None  # User's custom instruction (highest priority)
+    episodes_per_card: Optional[int] = None  # Episodes per card (default from saved config)
+
+# --- Rewrite (洗稿) Schemas ---
+
+class RewriteExtractRequest(BaseModel):
+    """Extract core/selling points from a reference script"""
+    project_name: str
+    script_text: str
+
+class RewriteGenerateRequest(BaseModel):
+    """Generate a reskinned concept from extracted analysis"""
+    project_name: str
+    instruction: Optional[str] = None  # 换皮方向（新题材/背景/风格）
 
 
 # --- Stage 2-6 Common Schemas ---
