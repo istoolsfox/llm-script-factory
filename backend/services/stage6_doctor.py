@@ -64,6 +64,8 @@ class Stage6Service(BaseService):
         """
         Run 6-Dimension Analysis on a single episode.
         """
+        if not (current_script or "").strip():
+            raise ValueError("当前剧集没有剧本内容，请先完成 Stage 4/5 再运行剧本医生")
         # 1. Render user prompt (3_analyze_user.j2)
         user_content = self.prompts.render(
             self.TMPL_ANALYZE,
@@ -121,6 +123,8 @@ class Stage6Service(BaseService):
         """
         Refine the episode based on instructions.
         """
+        if not (current_script or "").strip():
+            raise ValueError("当前剧集没有剧本内容，请先完成 Stage 4/5 再使用剧本医生")
         # 1. Render user prompt (4_refine_user.j2)
         user_content = self.prompts.render(
             self.TMPL_REFINE,

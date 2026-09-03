@@ -48,6 +48,8 @@ class Stage5Service(BaseService):
         story_bible = self._load_story_bible(project_name)
         story_bible_str = self._get_bible_text(story_bible)
         s4_scripts = self._load_s4_scripts(project_name)
+        if not s4_scripts:
+            raise ValueError("请先完成 Stage 4（剧本撰写），生成剧本草稿后再来润色")
 
         # Filter to requested range
         batch_scripts = [ep for ep in s4_scripts if start_ep <= ep.get('ep_id', 0) <= end_ep]

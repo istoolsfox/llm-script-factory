@@ -45,6 +45,9 @@ class Stage4Service(BaseService):
         story_bible_str = self._get_bible_text(story_bible)
         s3_outlines = self._load_s3_outlines(project_name)
 
+        if not s3_outlines:
+            raise ValueError("请先完成 Stage 3（分场编写），生成分场集纲后再来撰写剧本")
+
         # Filter to requested range
         batch_outlines = [ep for ep in s3_outlines if start_ep <= ep.get('ep_id', 0) <= end_ep]
         if not batch_outlines:

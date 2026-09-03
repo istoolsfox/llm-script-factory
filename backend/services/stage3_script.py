@@ -84,6 +84,9 @@ class Stage3Service(BaseService):
         s2_outlines = self._load_s2_outlines(project_name)
         previous_s3_outlines = self._load_s3_outlines(project_name)
 
+        if not s2_outlines:
+            raise ValueError("请先完成 Stage 2（结构构建），生成分集大纲后再来编写集纲")
+
         # 2. Prepare user prompt (always needed)
         context_window = self._get_context_window(start_ep, s2_outlines)
         rearview_mirror = self._get_rearview_mirror(previous_s3_outlines, start_ep)
